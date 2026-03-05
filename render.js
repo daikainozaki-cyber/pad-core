@@ -3,9 +3,10 @@
 // All rendering functions produce SVG elements without reading global state.
 // ========================================
 
-if (typeof require !== 'undefined') {
-  var { NOTE_NAMES_SHARP, GRID } = require('./data.js');
-  var { padPitchClass, padCalcAllVoicingPositions } = require('./theory.js');
+// Node.js: load dependencies into global scope (browser: already global via script tag)
+if (typeof require !== 'undefined' && typeof GRID === 'undefined') {
+  Object.assign(globalThis, require('./data.js'));
+  Object.assign(globalThis, require('./theory.js'));
 }
 
 // ======== GRID MATH ========

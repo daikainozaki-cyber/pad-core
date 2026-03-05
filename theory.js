@@ -4,11 +4,9 @@
 // Required state is passed as arguments.
 // ========================================
 
-if (typeof require !== 'undefined') {
-  var {
-    SCALES, KEY_SPELLINGS, FLAT_MAJOR_KEYS, NOTE_NAMES_SHARP, NOTE_NAMES_FLAT,
-    BUILDER_QUALITIES, SCALE_AVAIL_TENSIONS, GRID,
-  } = require('./data.js');
+// Node.js: load data.js exports into global scope (browser: already global via script tag)
+if (typeof require !== 'undefined' && typeof SCALES === 'undefined') {
+  Object.assign(globalThis, require('./data.js'));
 }
 
 // ======== BASIC PITCH MATH ========
