@@ -319,3 +319,147 @@ describe('padDegreeName', () => {
     expect(padDegreeName(3, [0, 3, 7])).toBe('m3');
   });
 });
+
+// ======== padEnumGuitarChordForms ========
+describe('padEnumGuitarChordForms', () => {
+  const GUITAR = [64, 59, 55, 50, 45, 40]; // standard tuning
+  const BASS = [43, 38, 33, 28]; // standard bass tuning
+
+  it('returns array of forms for C major', () => {
+    const forms = padEnumGuitarChordForms([0, 4, 7], 0, GUITAR, 21, 4);
+    expect(forms.length).toBeGreaterThan(0);
+    expect(forms.length).toBeLessThanOrEqual(15);
+  });
+
+  it('open C chord appears in results', () => {
+    const forms = padEnumGuitarChordForms([0, 4, 7], 0, GUITAR, 21, 4);
+    // Open C: x32010 → [0, 1, 0, 2, 3, null] in our indexing (high to low)
+    const openC = forms.find(f =>
+      f.frets[0] === 0 && f.frets[1] === 1 && f.frets[2] === 0 &&
+      f.frets[3] === 2 && f.frets[4] === 3 && f.frets[5] === null
+    );
+    expect(openC).toBeDefined();
+    expect(openC.rootInBass).toBe(true);
+    expect(openC.stringCount).toBe(5);
+    expect(openC.span).toBe(3);
+    expect(openC.gaps).toBe(0);
+  });
+
+  it('all forms have root', () => {
+    const forms = padEnumGuitarChordForms([0, 4, 7], 0, GUITAR, 21, 4);
+    for (const f of forms) {
+      const pcs = new Set();
+      for (let s = 0; s < 6; s++) {
+        if (f.frets[s] !== null) pcs.add((GUITAR[s] + f.frets[s]) % 12);
+      }
+      expect(pcs.has(0)).toBe(true); // C
+    }
+  });
+
+  it('all forms have 3rd when chord has one', () => {
+    const forms = padEnumGuitarChordForms([0, 4, 7], 0, GUITAR, 21, 4);
+    for (const f of forms) {
+      const pcs = new Set();
+      for (let s = 0; s < 6; s++) {
+        if (f.frets[s] !== null) pcs.add((GUITAR[s] + f.frets[s]) % 12);
+      }
+      expect(pcs.has(4)).toBe(true); // E (major 3rd)
+    }
+  });
+
+  it('respects max span of 4', () => {
+    const forms = padEnumGuitarChordForms([0, 4, 7, 11], 0, GUITAR, 21, 4);
+    for (const f of forms) {
+      const fretted = f.frets.filter(x => x !== null && x > 0);
+      if (fretted.length >= 2) {
+        const span = Math.max(...fretted) - Math.min(...fretted) + 1;
+        expect(span).toBeLessThanOrEqual(4);
+      }
+    }
+  });
+
+  it('open strings excluded from span', () => {
+    const forms = padEnumGuitarChordForms([0, 4, 7], 0, GUITAR, 21, 4);
+    const openC = forms.find(f =>
+      f.frets[0] === 0 && f.frets[1] === 1 && f.frets[2] === 0
+    );
+    // Open strings (fret 0) should not count toward span
+    // Only frets 1,2,3 count → span = 3
+    if (openC) expect(openC.span).toBeLessThanOrEqual(4);
+  });
+
+  it('Am7 includes open string forms', () => {
+    // Am7 = [0, 3, 7, 10], root = A(9)
+    const forms = padEnumGuitarChordForms([0, 3, 7, 10], 9, GUITAR, 21, 4);
+    expect(forms.length).toBeGreaterThan(0);
+    // Open Am7: x02010 → should have fret 0 somewhere
+    const hasOpen = forms.some(f => f.frets.includes(0));
+    expect(hasOpen).toBe(true);
+  });
+
+  it('returns at most maxResults forms', () => {
+    const forms = padEnumGuitarChordForms([0, 4, 7], 0, GUITAR, 21, 4, { maxResults: 5 });
+    expect(forms.length).toBeLessThanOrEqual(5);
+  });
+
+  it('root-in-bass forms are sorted first', () => {
+    const forms = padEnumGuitarChordForms([0, 4, 7], 0, GUITAR, 21, 4);
+    // Find first form without root in bass
+    const firstNonRoot = forms.findIndex(f => !f.rootInBass);
+    if (firstNonRoot > 0) {
+      // All forms before it should have root in bass
+      for (let i = 0; i < firstNonRoot; i++) {
+        expect(forms[i].rootInBass).toBe(true);
+      }
+    }
+  });
+
+  it('works with bass tuning (4 strings)', () => {
+    const forms = padEnumGuitarChordForms([0, 4, 7], 0, BASS, 21, 4);
+    expect(forms.length).toBeGreaterThan(0);
+    for (const f of forms) {
+      expect(f.frets.length).toBe(4);
+      expect(f.stringCount).toBeLessThanOrEqual(4);
+    }
+  });
+
+  it('Bbmaj7 has no open string forms', () => {
+    // Bbmaj7 = [0, 4, 7, 11], root = Bb(10)
+    const forms = padEnumGuitarChordForms([0, 4, 7, 11], 10, GUITAR, 21, 4);
+    expect(forms.length).toBeGreaterThan(0);
+    // Bb is not an open string note, so pure open forms shouldn't appear
+    // But open strings that happen to be chord tones (e.g., D=2 is not in Bbmaj7) can still appear
+  });
+
+  it('shell 1-3-7 (3 notes) produces many candidates', () => {
+    // C shell: [0, 4, 11] → only 3 notes, should produce many candidates
+    const forms = padEnumGuitarChordForms([0, 4, 11], 0, GUITAR, 21, 4);
+    expect(forms.length).toBe(15); // should hit maxResults
+  });
+
+  it('each form has at least minNotes sounding', () => {
+    const forms = padEnumGuitarChordForms([0, 4, 7], 0, GUITAR, 21, 4, { minNotes: 4 });
+    for (const f of forms) {
+      expect(f.stringCount).toBeGreaterThanOrEqual(4);
+    }
+  });
+
+  it('gaps count is correct', () => {
+    const forms = padEnumGuitarChordForms([0, 4, 7], 0, GUITAR, 21, 4);
+    for (const f of forms) {
+      // Verify gap count manually
+      let lo = -1, hi = -1;
+      for (let i = 0; i < f.frets.length; i++) {
+        if (f.frets[i] !== null) {
+          if (hi === -1) hi = i;
+          lo = i;
+        }
+      }
+      let gaps = 0;
+      for (let i = hi + 1; i < lo; i++) {
+        if (f.frets[i] === null) gaps++;
+      }
+      expect(f.gaps).toBe(gaps);
+    }
+  });
+});

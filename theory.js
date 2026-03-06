@@ -519,6 +519,136 @@ function padFindParentScales(rootPC, chordIntervals, currentKey) {
   return results;
 }
 
+// ======== GUITAR/BASS CHORD FORM ENUMERATION ========
+
+function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, options) {
+  if (!options) options = {};
+  var minNotes = options.minNotes !== undefined ? options.minNotes : 3;
+  var maxResults = options.maxResults !== undefined ? options.maxResults : 15;
+
+  // Compute absolute pitch class set
+  var chordAbsPCS = {};
+  for (var i = 0; i < chordPCS.length; i++) {
+    chordAbsPCS[(rootPC + (chordPCS[i] % 12)) % 12] = true;
+  }
+
+  // Check if chord has a 3rd (for filtering)
+  var has3 = false, has4 = false;
+  for (var i = 0; i < chordPCS.length; i++) {
+    var iv = chordPCS[i] % 12;
+    if (iv === 3) has3 = true;
+    if (iv === 4) has4 = true;
+  }
+  var hasThirdInChord = has3 || has4;
+  var third3PC = (rootPC + 3) % 12;
+  var third4PC = (rootPC + 4) % 12;
+
+  var numStrings = tuning.length;
+
+  // Build candidate frets per string: [null(mute), valid frets...]
+  var candidates = [];
+  for (var s = 0; s < numStrings; s++) {
+    var openPC = tuning[s] % 12;
+    var cands = [null];
+    for (var f = 0; f <= maxFrets; f++) {
+      if (chordAbsPCS[(openPC + f) % 12]) cands.push(f);
+    }
+    candidates.push(cands);
+  }
+
+  var results = [];
+  var chosen = new Array(numStrings);
+
+  function search(si, fMin, fMax, count) {
+    if (si === numStrings) {
+      if (count < minNotes) return;
+      var span = (fMin <= fMax) ? fMax - fMin + 1 : 0;
+      if (span > maxSpan) return;
+
+      // Collect pitch classes and find bass (lowest MIDI)
+      var notePCs = {};
+      var lowestMidi = Infinity, lowestPC = -1;
+      for (var i = 0; i < numStrings; i++) {
+        if (chosen[i] !== null) {
+          var midi = tuning[i] + chosen[i];
+          notePCs[midi % 12] = true;
+          if (midi < lowestMidi) { lowestMidi = midi; lowestPC = midi % 12; }
+        }
+      }
+
+      // Filter: must have root
+      if (!notePCs[rootPC]) return;
+      // Filter: must have 3rd if chord defines one
+      if (hasThirdInChord && !notePCs[third3PC] && !notePCs[third4PC]) return;
+
+      // Count gaps (muted strings between outermost sounding strings)
+      var hiStr = -1, loStr = -1; // hiStr = lowest index (highest pitch)
+      for (var i = 0; i < numStrings; i++) {
+        if (chosen[i] !== null) {
+          if (hiStr === -1) hiStr = i;
+          loStr = i;
+        }
+      }
+      var gaps = 0;
+      for (var i = hiStr + 1; i < loStr; i++) {
+        if (chosen[i] === null) gaps++;
+      }
+
+      results.push({
+        frets: chosen.slice(),
+        bassPC: lowestPC,
+        rootInBass: lowestPC === rootPC,
+        stringCount: count,
+        span: span,
+        gaps: gaps,
+      });
+      return;
+    }
+
+    var remaining = numStrings - si - 1;
+    var cands = candidates[si];
+    for (var c = 0; c < cands.length; c++) {
+      var fret = cands[c];
+      var newMin = fMin, newMax = fMax, newCount = count;
+
+      if (fret !== null) {
+        newCount++;
+        if (fret > 0) {
+          newMin = Math.min(fMin, fret);
+          newMax = Math.max(fMax, fret);
+          if (newMax - newMin + 1 > maxSpan) continue;
+        }
+      }
+      if (newCount + remaining < minNotes) continue;
+
+      chosen[si] = fret;
+      search(si + 1, newMin, newMax, newCount);
+    }
+  }
+
+  search(0, Infinity, 0, 0);
+
+  // Sort by weighted score (higher = better)
+  // Balances string count against fret position so open chords rank well
+  function sortScore(r) {
+    var avgFret = 0, n = 0;
+    for (var i = 0; i < r.frets.length; i++) {
+      if (r.frets[i] !== null && r.frets[i] > 0) { avgFret += r.frets[i]; n++; }
+    }
+    avgFret = n > 0 ? avgFret / n : 0;
+    return (r.rootInBass ? 1000 : 0)
+      + r.stringCount * 30
+      - avgFret * 20
+      - r.span * 10
+      - r.gaps * 15;
+  }
+  results.sort(function(a, b) {
+    return sortScore(b) - sortScore(a);
+  });
+
+  return results.slice(0, maxResults);
+}
+
 // Conditional exports for Node.js (Vitest) — ignored in browser
 if (typeof module !== 'undefined') module.exports = {
   padPitchClass, padGetParentMajorKey, padPcName, padNoteNameForKey,
@@ -527,5 +657,6 @@ if (typeof module !== 'undefined') module.exports = {
   padGetShellIntervals, padCalcAllVoicingPositions,
   padChordContextKey, padGetBuilderChordName,
   padGetDiatonicTetrads, padFindParentScales,
+  padEnumGuitarChordForms,
   DIATONIC_CHORD_DB,
 };
