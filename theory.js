@@ -682,16 +682,16 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
 
   // Scoring weights: override via options.weights for genre presets (bossa/jazz/funk)
   var W = options.weights || {};
-  var wRootBass   = W.rootBass   !== undefined ? W.rootBass   : 1000;
-  var wFifthBass  = W.fifthBass  !== undefined ? W.fifthBass  : 0;
+  var wRootBass   = W.rootBass   !== undefined ? W.rootBass   : 120;
+  var wFifthBass  = W.fifthBass  !== undefined ? W.fifthBass  : 100;
   var wRootStr6   = W.rootStr6   !== undefined ? W.rootStr6   : 50;
   var wRootStr5   = W.rootStr5   !== undefined ? W.rootStr5   : 30;
   var wRootStr4   = W.rootStr4   !== undefined ? W.rootStr4   : 20;
-  var wTop4       = W.top4       !== undefined ? W.top4       : 80;
+  var wTop4       = W.top4       !== undefined ? W.top4       : 30;
   var wGuideTone  = W.guideTone  !== undefined ? W.guideTone  : 40;
   var wOpenStr    = W.openStr    !== undefined ? W.openStr    : 15;
   var wStringCount= W.stringCount!== undefined ? W.stringCount: 30;
-  var wAvgFret    = W.avgFret    !== undefined ? W.avgFret    : 8;
+  var wAvgFret    = W.avgFret    !== undefined ? W.avgFret    : 15;
   var wSpan       = W.span       !== undefined ? W.span       : 10;
   var wGaps       = W.gaps       !== undefined ? W.gaps       : 15;
 
