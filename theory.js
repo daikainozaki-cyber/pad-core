@@ -680,6 +680,21 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
   var allowRootless = !!options.allowRootless;
   var noOpen = !!options.noOpen; // funk/soul: no open strings (can't mute for tight rhythm)
 
+  // Scoring weights: override via options.weights for genre presets (bossa/jazz/funk)
+  var W = options.weights || {};
+  var wRootBass   = W.rootBass   !== undefined ? W.rootBass   : 1000;
+  var wFifthBass  = W.fifthBass  !== undefined ? W.fifthBass  : 0;
+  var wRootStr6   = W.rootStr6   !== undefined ? W.rootStr6   : 50;
+  var wRootStr5   = W.rootStr5   !== undefined ? W.rootStr5   : 30;
+  var wRootStr4   = W.rootStr4   !== undefined ? W.rootStr4   : 20;
+  var wTop4       = W.top4       !== undefined ? W.top4       : 80;
+  var wGuideTone  = W.guideTone  !== undefined ? W.guideTone  : 40;
+  var wOpenStr    = W.openStr    !== undefined ? W.openStr    : 15;
+  var wStringCount= W.stringCount!== undefined ? W.stringCount: 30;
+  var wAvgFret    = W.avgFret    !== undefined ? W.avgFret    : 8;
+  var wSpan       = W.span       !== undefined ? W.span       : 10;
+  var wGaps       = W.gaps       !== undefined ? W.gaps       : 15;
+
   // Fifth is optional when chord has tensions (9th+), since guitar has only 6 strings.
   // BUT: altered 5ths (b5=6, #5=8) that REPLACE the natural 5th define chord quality
   // (dim, m7b5, aug) and must NOT be omitted.
@@ -703,12 +718,14 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
     chordAbsPCS[(rootPC + (chordPCS[i] % 12)) % 12] = true;
   }
 
-  // Check if chord has a 3rd (for filtering)
-  var has3 = false, has4 = false;
+  // Check if chord has a 3rd, 6th, 7th (for filtering and guide tone bonus)
+  var has3 = false, has4 = false, has6thInChord = false, has7thInChord = false;
   for (var i = 0; i < chordPCS.length; i++) {
     var iv = chordPCS[i] % 12;
     if (iv === 3) has3 = true;
     if (iv === 4) has4 = true;
+    if (iv === 9) has6thInChord = true;
+    if (iv === 10 || iv === 11) has7thInChord = true;
   }
   var hasThirdInChord = has3 || has4;
   var third3PC = (rootPC + 3) % 12;
@@ -863,46 +880,64 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       if (r.frets[i] !== null && r.frets[i] > 0) { avgFret += r.frets[i]; n++; }
     }
     avgFret = n > 0 ? avgFret / n : 0;
+    // Fifth-in-bass bonus: bossa batida plays R+5 on bass strings (thumb)
+    // Results in 2nd inversion voicings (C/G, Am/E) as standard bossa forms
+    var fifthBassBonus = 0;
+    if (!r.rootInBass && wFifthBass > 0) {
+      var fifthPC = (rootPC + 7) % 12;
+      if (r.bassPC === fifthPC) fifthBassBonus = wFifthBass;
+    }
+
     // CAGED root string bonus: 6th (E form), 5th (A form), 4th (D form)
-    // Index: 5=6th string, 4=5th string, 3=4th string
     var rootStrBonus = 0;
     if (r.rootInBass && numStrings === 6) {
-      if (r.bassString === 5) rootStrBonus = 50;      // 6th string root (E form)
-      else if (r.bassString === 4) rootStrBonus = 30;  // 5th string root (A form)
-      else if (r.bassString === 3) rootStrBonus = 20;  // 4th string root (D form)
+      if (r.bassString === 5) rootStrBonus = wRootStr6;
+      else if (r.bassString === 4) rootStrBonus = wRootStr5;
+      else if (r.bassString === 3) rootStrBonus = wRootStr4;
     }
     // Top-4-string comping bonus: strings 1-4 only (jazz/funk standard)
     var top4Bonus = 0;
     if (numStrings === 6 && r.frets[4] === null && r.frets[5] === null) {
       var soundingCount = 0;
       for (var i = 0; i < 4; i++) { if (r.frets[i] !== null) soundingCount++; }
-      if (soundingCount >= 3) top4Bonus = 80;
+      if (soundingCount >= 3) top4Bonus = wTop4;
     }
-    // Guide tone bonus: 3rd + 7th both present = harmonically complete voicing
-    // Shell voicing core (R37/R73) and extended forms (R573 etc.) rank higher
+    // Guide tone bonus: 3rd + 7th (or 3rd + 6th for 6th chords) = harmonically complete
+    // Shell voicing core: R37 for 7th chords, R36 for 6th chords (bossa/jazz standard)
     var guideToneBonus = 0;
-    var has3rdInForm = false, has7thInForm = false;
+    var has3rdInForm = false, has7thInForm = false, has6thInForm = false;
     for (var i = 0; i < r.frets.length; i++) {
       if (r.frets[i] !== null) {
         var pc = (tuning[i] + r.frets[i]) % 12;
         if (pc === third3PC || pc === third4PC) has3rdInForm = true;
-        if (hasThirdInChord) {
-          // 7th = minor 7th (10) or major 7th (11) from root
-          var fromRoot = ((pc - rootPC) + 12) % 12;
-          if (fromRoot === 10 || fromRoot === 11) has7thInForm = true;
-        }
+        var fromRoot = ((pc - rootPC) + 12) % 12;
+        if (fromRoot === 10 || fromRoot === 11) has7thInForm = true;
+        if (fromRoot === 9) has6thInForm = true;
       }
     }
-    if (has3rdInForm && has7thInForm) guideToneBonus = 40;
+    // R37 shell (7th chords) or R36 shell (6th chords without 7th)
+    if (has3rdInForm && has7thInForm) guideToneBonus = wGuideTone;
+    else if (has3rdInForm && has6thInForm && has6thInChord && !has7thInChord) guideToneBonus = wGuideTone;
 
-    return (r.rootInBass ? 1000 : 0)
+    // Open string bonus: open strings resonate with natural harmonics,
+    // essential for bossa/folk/singer-songwriter voicings
+    var openBonus = 0;
+    if (!noOpen) {
+      for (var i = 0; i < r.frets.length; i++) {
+        if (r.frets[i] === 0) openBonus += wOpenStr;
+      }
+    }
+
+    return (r.rootInBass ? wRootBass : 0)
+      + fifthBassBonus
       + rootStrBonus
       + top4Bonus
       + guideToneBonus
-      + r.stringCount * 30
-      - avgFret * 8
-      - r.span * 10
-      - r.gaps * 15;
+      + openBonus
+      + r.stringCount * wStringCount
+      - avgFret * wAvgFret
+      - r.span * wSpan
+      - r.gaps * wGaps;
   }
 
   if (allowRootless) {
