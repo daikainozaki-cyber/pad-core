@@ -9,6 +9,129 @@ if (typeof require !== 'undefined' && typeof SCALES === 'undefined') {
   Object.assign(globalThis, require('./data.js'));
 }
 
+// ======== CHORD NAME PARSING ========
+
+function padParseRoot(str) {
+  if (!str || str.length === 0) return null;
+  var first = str[0].toUpperCase();
+  if (first < 'A' || first > 'G') return null;
+  var name = first;
+  if (str.length > 1) {
+    var second = str[1];
+    if (second === '#' || second === '\u266F') name += '#';      // # or ♯
+    else if (second === 'b' || second === '\u266D') name += 'b'; // b or ♭
+  }
+  var pc = PAD_ROOT_TO_PC[name];
+  return pc !== undefined ? { pc: pc, len: name.length } : null;
+}
+
+function padParseChordName(input) {
+  if (!input) return null;
+  input = input.trim();
+  if (!input) return null;
+
+  // Normalize: uppercase first letter
+  input = input[0].toUpperCase() + input.slice(1);
+
+  // 1. Extract bass note (slash chord: /X at end)
+  var bass = null;
+  var mainPart = input;
+  var slashIdx = input.lastIndexOf('/');
+  if (slashIdx > 0) {
+    var bassStr = input.slice(slashIdx + 1);
+    var bassResult = padParseRoot(bassStr);
+    if (bassResult && bassResult.len === bassStr.length) {
+      bass = bassResult.pc;
+      mainPart = input.slice(0, slashIdx);
+    }
+  }
+
+  // 2. Parse root note
+  var rootResult = padParseRoot(mainPart);
+  if (!rootResult) return null;
+
+  // 3. Extract quality string (everything after root)
+  var qualityStr = mainPart.slice(rootResult.len);
+
+  // 4. Match quality (longest match first)
+  var matchedKey = null;
+  for (var i = 0; i < PAD_QUALITY_KEYS.length; i++) {
+    if (qualityStr === PAD_QUALITY_KEYS[i]) {
+      matchedKey = PAD_QUALITY_KEYS[i];
+      break;
+    }
+  }
+
+  // 4b. Fallback: compound tension like "m7(9,11)" or "7(b9,#11)"
+  if (matchedKey === null) {
+    var parenMatch = qualityStr.match(/^(.*?)\(([^)]+)\)$/);
+    if (parenMatch) {
+      var baseQ = parenMatch[1];
+      var tensionStr = parenMatch[2];
+      if (PAD_QUALITY_INTERVALS[baseQ] !== undefined) {
+        var TENSION_MAP = {
+          '9': 14, 'b9': 13, '#9': 15,
+          '11': 17, '#11': 18,
+          '13': 21, 'b13': 20,
+          '#5': 8, 'b5': 6,
+        };
+        var baseIntervals = PAD_QUALITY_INTERVALS[baseQ].slice();
+        var tensions = tensionStr.split(',').map(function(s) { return s.trim(); });
+        var valid = true;
+        for (var t = 0; t < tensions.length; t++) {
+          var iv = TENSION_MAP[tensions[t]];
+          if (iv === undefined) { valid = false; break; }
+          if (tensions[t] === 'b5' || tensions[t] === '#5') {
+            var idx = baseIntervals.indexOf(7);
+            if (idx >= 0) baseIntervals[idx] = iv;
+            else if (baseIntervals.indexOf(iv) < 0) baseIntervals.push(iv);
+          } else {
+            if (baseIntervals.indexOf(iv) < 0) baseIntervals.push(iv);
+          }
+        }
+        if (valid) {
+          baseIntervals.sort(function(a, b) { return a - b; });
+          var rootName = mainPart.slice(0, rootResult.len);
+          var displayQuality = PAD_QUALITY_DISPLAY[baseQ] || baseQ;
+          var displayName = rootName + displayQuality + '(' + tensions.join(',') + ')';
+          if (bass !== null) {
+            var bassStr2 = input.slice(input.lastIndexOf('/') + 1);
+            displayName += '/' + bassStr2[0].toUpperCase() + bassStr2.slice(1);
+          }
+          return {
+            root: rootResult.pc,
+            quality: qualityStr,
+            intervals: baseIntervals,
+            bass: bass,
+            displayName: displayName,
+          };
+        }
+      }
+    }
+  }
+
+  if (matchedKey === null) return null;
+
+  var intervals = PAD_QUALITY_INTERVALS[matchedKey];
+
+  // Build canonical display name (resolve aliases)
+  var rootName2 = mainPart.slice(0, rootResult.len);
+  var displayQuality2 = PAD_QUALITY_DISPLAY[matchedKey] || matchedKey;
+  var displayName2 = rootName2 + displayQuality2;
+  if (bass !== null) {
+    var bassStr3 = input.slice(input.lastIndexOf('/') + 1);
+    displayName2 += '/' + bassStr3[0].toUpperCase() + bassStr3.slice(1);
+  }
+
+  return {
+    root: rootResult.pc,
+    quality: matchedKey,
+    intervals: intervals.slice(),
+    bass: bass,
+    displayName: displayName2,
+  };
+}
+
 // ======== BASIC PITCH MATH ========
 
 function padPitchClass(midi) {
@@ -680,6 +803,7 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
 
 // Conditional exports for Node.js (Vitest) — ignored in browser
 if (typeof module !== 'undefined') module.exports = {
+  padParseRoot, padParseChordName,
   padPitchClass, padGetParentMajorKey, padPcName, padNoteNameForKey,
   padFifthsDistance, padApplyTension,
   padCalcVoicingOffsets, padGetBassCase, padApplyOnChordBass,

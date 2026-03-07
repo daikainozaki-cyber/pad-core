@@ -1,5 +1,129 @@
 import { describe, it, expect } from 'vitest';
 
+// ======== padParseRoot ========
+describe('padParseRoot', () => {
+  it('parses C', () => {
+    const r = padParseRoot('C');
+    expect(r).toEqual({ pc: 0, len: 1 });
+  });
+
+  it('parses Bb', () => {
+    const r = padParseRoot('Bb');
+    expect(r).toEqual({ pc: 10, len: 2 });
+  });
+
+  it('parses F#', () => {
+    const r = padParseRoot('F#');
+    expect(r).toEqual({ pc: 6, len: 2 });
+  });
+
+  it('returns null for empty string', () => {
+    expect(padParseRoot('')).toBeNull();
+  });
+
+  it('returns null for non-note', () => {
+    expect(padParseRoot('X')).toBeNull();
+  });
+
+  it('handles unicode sharp ♯', () => {
+    const r = padParseRoot('C\u266F');
+    expect(r).toEqual({ pc: 1, len: 2 });
+  });
+
+  it('handles unicode flat ♭', () => {
+    const r = padParseRoot('E\u266D');
+    expect(r).toEqual({ pc: 3, len: 2 });
+  });
+});
+
+// ======== padParseChordName ========
+describe('padParseChordName', () => {
+  it('parses Cm7', () => {
+    const r = padParseChordName('Cm7');
+    expect(r).not.toBeNull();
+    expect(r.root).toBe(0);
+    expect(r.quality).toBe('m7');
+    expect(r.intervals).toEqual([0, 3, 7, 10]);
+    expect(r.bass).toBeNull();
+    expect(r.displayName).toBe('Cm7');
+  });
+
+  it('parses Am7/G (slash chord)', () => {
+    const r = padParseChordName('Am7/G');
+    expect(r).not.toBeNull();
+    expect(r.root).toBe(9);
+    expect(r.quality).toBe('m7');
+    expect(r.bass).toBe(7);
+    expect(r.displayName).toBe('Am7/G');
+  });
+
+  it('parses G7(b9,#11) compound tension', () => {
+    const r = padParseChordName('G7(b9,#11)');
+    expect(r).not.toBeNull();
+    expect(r.root).toBe(7);
+    expect(r.intervals).toEqual([0, 4, 7, 10, 13, 18]);
+    expect(r.bass).toBeNull();
+  });
+
+  it('returns null for empty string', () => {
+    expect(padParseChordName('')).toBeNull();
+  });
+
+  it('returns null for invalid input', () => {
+    expect(padParseChordName('X')).toBeNull();
+  });
+
+  it('parses major triad (C)', () => {
+    const r = padParseChordName('C');
+    expect(r.root).toBe(0);
+    expect(r.intervals).toEqual([0, 4, 7]);
+  });
+
+  it('parses Dbmaj7', () => {
+    const r = padParseChordName('Dbmaj7');
+    expect(r.root).toBe(1);
+    expect(r.intervals).toEqual([0, 4, 7, 11]);
+  });
+
+  it('resolves alias M7 → maj7 in displayName', () => {
+    const r = padParseChordName('CM7');
+    expect(r.displayName).toBe('Cmaj7');
+  });
+
+  it('parses lowercase root as uppercase', () => {
+    const r = padParseChordName('cm7');
+    expect(r).not.toBeNull();
+    expect(r.root).toBe(0);
+    expect(r.quality).toBe('m7');
+  });
+
+  it('handles whitespace', () => {
+    const r = padParseChordName('  Dm7  ');
+    expect(r).not.toBeNull();
+    expect(r.root).toBe(2);
+  });
+
+  it('parses slash chord with flat bass', () => {
+    const r = padParseChordName('C/Bb');
+    expect(r).not.toBeNull();
+    expect(r.root).toBe(0);
+    expect(r.bass).toBe(10);
+    expect(r.displayName).toBe('C/Bb');
+  });
+
+  it('parses dim7', () => {
+    const r = padParseChordName('Bdim7');
+    expect(r.root).toBe(11);
+    expect(r.intervals).toEqual([0, 3, 6, 9]);
+  });
+
+  it('parses unicode △7', () => {
+    const r = padParseChordName('C\u25B37');
+    expect(r.root).toBe(0);
+    expect(r.intervals).toEqual([0, 4, 7, 11]);
+  });
+});
+
 describe('padPitchClass', () => {
   it('returns 0-11 for standard MIDI range', () => {
     expect(padPitchClass(60)).toBe(0);
