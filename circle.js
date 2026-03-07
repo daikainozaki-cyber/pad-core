@@ -313,66 +313,55 @@ function padRenderCircleOfFifths(svgEl, options) {
 
     // --- Scale mode buttons (minor only) ---
     if (state.showScaleModeButtons && state.selectedType === 'minor') {
-      var isMelodic = state.scaleMode === 'melodic';
+      var isNatural = state.scaleMode === 'natural';
       var isHarmonic = state.scaleMode === 'harmonic';
+      var isMelodic = state.scaleMode === 'melodic';
 
-      // Melodic button
-      var mRect = svgNS('rect');
-      mRect.setAttribute('x', CX - 55);
-      mRect.setAttribute('y', CY);
-      mRect.setAttribute('width', 50);
-      mRect.setAttribute('height', 30);
-      mRect.setAttribute('rx', '5');
-      mRect.setAttribute('fill', isMelodic ? '#43a047' : 'white');
-      mRect.setAttribute('stroke', '#43a047');
-      mRect.setAttribute('stroke-width', '2');
-      mRect.setAttribute('cursor', 'pointer');
-      mRect.addEventListener('click', function() {
-        state.scaleMode = state.scaleMode === 'melodic' ? 'natural' : 'melodic';
-        render();
-        if (state.onScaleModeChange) state.onScaleModeChange(state.scaleMode);
+      var btnW = 90, btnH = 36, btnGap = 8, btnRx = 6;
+      var totalW = btnW * 3 + btnGap * 2;
+      var btnY = CY + 2;
+      var btnStartX = CX - totalW / 2;
+
+      var modeButtons = [
+        { label: 'Natural', active: isNatural, mode: 'natural', color: '#66bb6a' },
+        { label: 'Harmonic', active: isHarmonic, mode: 'harmonic', color: '#1b5e20' },
+        { label: 'Melodic', active: isMelodic, mode: 'melodic', color: '#43a047' }
+      ];
+
+      modeButtons.forEach(function(btn, i) {
+        var bx = btnStartX + i * (btnW + btnGap);
+
+        var rect = svgNS('rect');
+        rect.setAttribute('x', bx);
+        rect.setAttribute('y', btnY);
+        rect.setAttribute('width', btnW);
+        rect.setAttribute('height', btnH);
+        rect.setAttribute('rx', btnRx);
+        rect.setAttribute('fill', btn.active ? btn.color : 'white');
+        rect.setAttribute('stroke', btn.color);
+        rect.setAttribute('stroke-width', '2');
+        rect.setAttribute('cursor', 'pointer');
+        rect.addEventListener('click', (function(mode) {
+          return function() {
+            state.scaleMode = mode;
+            render();
+            if (state.onScaleModeChange) state.onScaleModeChange(state.scaleMode);
+          };
+        })(btn.mode));
+        svgEl.appendChild(rect);
+
+        var text = svgNS('text');
+        text.setAttribute('x', bx + btnW / 2);
+        text.setAttribute('y', btnY + btnH / 2 + 5);
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('font-size', '14');
+        text.setAttribute('font-weight', '600');
+        text.setAttribute('fill', btn.active ? 'white' : btn.color);
+        text.setAttribute('pointer-events', 'none');
+        text.setAttribute('style', 'text-rendering: optimizeLegibility;');
+        text.textContent = btn.label;
+        svgEl.appendChild(text);
       });
-      svgEl.appendChild(mRect);
-
-      var mText = svgNS('text');
-      mText.setAttribute('x', CX - 30);
-      mText.setAttribute('y', CY + 19);
-      mText.setAttribute('text-anchor', 'middle');
-      mText.setAttribute('font-size', '8');
-      mText.setAttribute('font-weight', '600');
-      mText.setAttribute('fill', isMelodic ? 'white' : '#43a047');
-      mText.setAttribute('pointer-events', 'none');
-      mText.textContent = 'Melodic';
-      svgEl.appendChild(mText);
-
-      // Harmonic button
-      var hRect = svgNS('rect');
-      hRect.setAttribute('x', CX + 5);
-      hRect.setAttribute('y', CY);
-      hRect.setAttribute('width', 50);
-      hRect.setAttribute('height', 30);
-      hRect.setAttribute('rx', '5');
-      hRect.setAttribute('fill', isHarmonic ? '#1b5e20' : 'white');
-      hRect.setAttribute('stroke', '#1b5e20');
-      hRect.setAttribute('stroke-width', '2');
-      hRect.setAttribute('cursor', 'pointer');
-      hRect.addEventListener('click', function() {
-        state.scaleMode = state.scaleMode === 'harmonic' ? 'natural' : 'harmonic';
-        render();
-        if (state.onScaleModeChange) state.onScaleModeChange(state.scaleMode);
-      });
-      svgEl.appendChild(hRect);
-
-      var hText = svgNS('text');
-      hText.setAttribute('x', CX + 30);
-      hText.setAttribute('y', CY + 19);
-      hText.setAttribute('text-anchor', 'middle');
-      hText.setAttribute('font-size', '8');
-      hText.setAttribute('font-weight', '600');
-      hText.setAttribute('fill', isHarmonic ? 'white' : '#1b5e20');
-      hText.setAttribute('pointer-events', 'none');
-      hText.textContent = 'Harmonic';
-      svgEl.appendChild(hText);
     }
 
     // --- Degree circles ---
