@@ -41,7 +41,21 @@ var PAD_CIRCLE_DEFAULT_COLORS = {
   dominant: '#ef5350',
   majorSegment: '#388e3c',
   minorSegment: '#81c784',
-  selectedStroke: '#ff6f00'
+  selectedStroke: '#ff6f00',
+  centerFill: 'white',
+  majorText: 'white',
+  minorText: '#1b5e20',
+  segmentStroke: 'white',
+  titleColor: '#2e7d32',
+  subtitleColor: '#66bb6a',
+  degreeText: '#333',
+  degreeTextAlt: 'white',
+  degreeStroke: 'white',
+  buttonBg: 'white',
+  buttonActiveText: 'white',
+  buttonNatural: '#66bb6a',
+  buttonHarmonic: '#1b5e20',
+  buttonMelodic: '#43a047'
 };
 
 // ======== DEGREE DATA (circle overlay) ========
@@ -178,7 +192,21 @@ function padRenderCircleOfFifths(svgEl, options) {
     dominant: uc.dominant || dc.dominant,
     majorSegment: uc.majorSegment || dc.majorSegment,
     minorSegment: uc.minorSegment || dc.minorSegment,
-    selectedStroke: uc.selectedStroke || dc.selectedStroke
+    selectedStroke: uc.selectedStroke || dc.selectedStroke,
+    centerFill: uc.centerFill || dc.centerFill,
+    majorText: uc.majorText || dc.majorText,
+    minorText: uc.minorText || dc.minorText,
+    segmentStroke: uc.segmentStroke || dc.segmentStroke,
+    titleColor: uc.titleColor || dc.titleColor,
+    subtitleColor: uc.subtitleColor || dc.subtitleColor,
+    degreeText: uc.degreeText || dc.degreeText,
+    degreeTextAlt: uc.degreeTextAlt || dc.degreeTextAlt,
+    degreeStroke: uc.degreeStroke || dc.degreeStroke,
+    buttonBg: uc.buttonBg || dc.buttonBg,
+    buttonActiveText: uc.buttonActiveText || dc.buttonActiveText,
+    buttonNatural: uc.buttonNatural || dc.buttonNatural,
+    buttonHarmonic: uc.buttonHarmonic || dc.buttonHarmonic,
+    buttonMelodic: uc.buttonMelodic || dc.buttonMelodic
   };
 
   // Fixed coordinate system — SVG viewBox handles scaling
@@ -214,7 +242,7 @@ function padRenderCircleOfFifths(svgEl, options) {
       var majorSeg = svgNS('path');
       majorSeg.setAttribute('d', majorD);
       majorSeg.setAttribute('fill', colors.majorSegment);
-      majorSeg.setAttribute('stroke', isSelected && state.selectedType === 'major' ? colors.selectedStroke : 'white');
+      majorSeg.setAttribute('stroke', isSelected && state.selectedType === 'major' ? colors.selectedStroke : colors.segmentStroke);
       majorSeg.setAttribute('stroke-width', isSelected && state.selectedType === 'major' ? '3' : '2');
       majorSeg.setAttribute('cursor', 'pointer');
       majorSeg.addEventListener('click', (function(i) {
@@ -236,7 +264,7 @@ function padRenderCircleOfFifths(svgEl, options) {
       majorText.setAttribute('dominant-baseline', 'middle');
       majorText.setAttribute('font-size', '22');
       majorText.setAttribute('font-weight', '600');
-      majorText.setAttribute('fill', 'white');
+      majorText.setAttribute('fill', colors.majorText);
       majorText.setAttribute('pointer-events', 'none');
       majorText.setAttribute('style', 'text-rendering: optimizeLegibility;');
       majorText.textContent = key.major;
@@ -247,7 +275,7 @@ function padRenderCircleOfFifths(svgEl, options) {
       var minorSeg = svgNS('path');
       minorSeg.setAttribute('d', minorD);
       minorSeg.setAttribute('fill', colors.minorSegment);
-      minorSeg.setAttribute('stroke', isSelected && state.selectedType === 'minor' ? colors.selectedStroke : 'white');
+      minorSeg.setAttribute('stroke', isSelected && state.selectedType === 'minor' ? colors.selectedStroke : colors.segmentStroke);
       minorSeg.setAttribute('stroke-width', isSelected && state.selectedType === 'minor' ? '3' : '2');
       minorSeg.setAttribute('cursor', 'pointer');
       minorSeg.addEventListener('click', (function(i) {
@@ -269,7 +297,7 @@ function padRenderCircleOfFifths(svgEl, options) {
       minorText.setAttribute('dominant-baseline', 'middle');
       minorText.setAttribute('font-size', '16');
       minorText.setAttribute('font-weight', '500');
-      minorText.setAttribute('fill', '#1b5e20');
+      minorText.setAttribute('fill', colors.minorText);
       minorText.setAttribute('pointer-events', 'none');
       minorText.setAttribute('style', 'text-rendering: optimizeLegibility;');
       minorText.textContent = key.minor;
@@ -281,7 +309,7 @@ function padRenderCircleOfFifths(svgEl, options) {
     centerCircle.setAttribute('cx', CX);
     centerCircle.setAttribute('cy', CY);
     centerCircle.setAttribute('r', CENTER_R);
-    centerCircle.setAttribute('fill', 'white');
+    centerCircle.setAttribute('fill', colors.centerFill);
     svgEl.appendChild(centerCircle);
 
     // --- Title ---
@@ -293,7 +321,7 @@ function padRenderCircleOfFifths(svgEl, options) {
       title1.setAttribute('dominant-baseline', 'middle');
       title1.setAttribute('font-size', '24');
       title1.setAttribute('font-weight', '700');
-      title1.setAttribute('fill', '#2e7d32');
+      title1.setAttribute('fill', colors.titleColor);
       title1.setAttribute('style', 'text-rendering: optimizeLegibility;');
       title1.textContent = '五度圏';
       svgEl.appendChild(title1);
@@ -305,7 +333,7 @@ function padRenderCircleOfFifths(svgEl, options) {
       title2.setAttribute('dominant-baseline', 'middle');
       title2.setAttribute('font-size', '16');
       title2.setAttribute('font-weight', '400');
-      title2.setAttribute('fill', '#66bb6a');
+      title2.setAttribute('fill', colors.subtitleColor);
       title2.setAttribute('style', 'text-rendering: optimizeLegibility;');
       title2.textContent = 'Circle of Fifths';
       svgEl.appendChild(title2);
@@ -323,9 +351,9 @@ function padRenderCircleOfFifths(svgEl, options) {
       var btnStartX = CX - totalW / 2;
 
       var modeButtons = [
-        { label: 'Natural', active: isNatural, mode: 'natural', color: '#66bb6a' },
-        { label: 'Harmonic', active: isHarmonic, mode: 'harmonic', color: '#1b5e20' },
-        { label: 'Melodic', active: isMelodic, mode: 'melodic', color: '#43a047' }
+        { label: 'Natural', active: isNatural, mode: 'natural', color: colors.buttonNatural },
+        { label: 'Harmonic', active: isHarmonic, mode: 'harmonic', color: colors.buttonHarmonic },
+        { label: 'Melodic', active: isMelodic, mode: 'melodic', color: colors.buttonMelodic }
       ];
 
       modeButtons.forEach(function(btn, i) {
@@ -337,7 +365,7 @@ function padRenderCircleOfFifths(svgEl, options) {
         rect.setAttribute('width', btnW);
         rect.setAttribute('height', btnH);
         rect.setAttribute('rx', btnRx);
-        rect.setAttribute('fill', btn.active ? btn.color : 'white');
+        rect.setAttribute('fill', btn.active ? btn.color : colors.buttonBg);
         rect.setAttribute('stroke', btn.color);
         rect.setAttribute('stroke-width', '2');
         rect.setAttribute('cursor', 'pointer');
@@ -356,7 +384,7 @@ function padRenderCircleOfFifths(svgEl, options) {
         text.setAttribute('text-anchor', 'middle');
         text.setAttribute('font-size', '14');
         text.setAttribute('font-weight', '600');
-        text.setAttribute('fill', btn.active ? 'white' : btn.color);
+        text.setAttribute('fill', btn.active ? colors.buttonActiveText : btn.color);
         text.setAttribute('pointer-events', 'none');
         text.setAttribute('style', 'text-rendering: optimizeLegibility;');
         text.textContent = btn.label;
@@ -398,7 +426,7 @@ function padRenderCircleOfFifths(svgEl, options) {
         circle.setAttribute('r', degree.isMajor ? DEGREE_R : MINOR_DEGREE_R);
         circle.setAttribute('fill', colors[degree.colorType]);
         circle.setAttribute('fill-opacity', degree.isMajor ? '1' : '0.8');
-        circle.setAttribute('stroke', 'white');
+        circle.setAttribute('stroke', colors.degreeStroke);
         circle.setAttribute('stroke-width', '2');
         degGroup.appendChild(circle);
 
@@ -409,7 +437,7 @@ function padRenderCircleOfFifths(svgEl, options) {
         text.setAttribute('dominant-baseline', 'middle');
         text.setAttribute('font-size', degree.isMajor ? '14' : '10');
         text.setAttribute('font-weight', '600');
-        text.setAttribute('fill', (degree.isSubstitute || degree.colorType === 'dominant') ? 'white' : '#333');
+        text.setAttribute('fill', (degree.isSubstitute || degree.colorType === 'dominant') ? colors.degreeTextAlt : colors.degreeText);
         text.setAttribute('pointer-events', 'none');
         text.setAttribute('style', 'text-rendering: optimizeLegibility;');
         text.textContent = degree.roman;
