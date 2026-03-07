@@ -216,6 +216,36 @@ describe('padGetDiatonicTetrads', () => {
     const tetrads = padGetDiatonicTetrads(SCALES[0].pcs, 0);
     expect(tetrads.map(t => t.rootPC)).toEqual([0, 2, 4, 5, 7, 9, 11]);
   });
+
+  it('returns triads when noteCount=3', () => {
+    const triads = padGetDiatonicTetrads(SCALES[0].pcs, 0, 3);
+    expect(triads).toHaveLength(7);
+    triads.forEach(t => expect(t.pcs).toHaveLength(3));
+  });
+
+  it('C Major triads: I, ii, iii, IV, V, vi, vii°', () => {
+    const triads = padGetDiatonicTetrads(SCALES[0].pcs, 0, 3);
+    const names = triads.map(t => t.quality.name);
+    expect(names).toEqual(['', 'm', 'm', '', '', 'm', 'dim']);
+  });
+
+  it('C Major triad degrees use correct roman numerals', () => {
+    const triads = padGetDiatonicTetrads(SCALES[0].pcs, 0, 3);
+    const degrees = triads.map(t => t.degree);
+    expect(degrees).toEqual(['I', 'IIm', 'IIIm', 'IV', 'V', 'VIm', 'VIIdim']);
+  });
+
+  it('Harmonic minor triads include aug', () => {
+    const triads = padGetDiatonicTetrads(SCALES[7].pcs, 0, 3);
+    const names = triads.map(t => t.quality.name);
+    expect(names[2]).toBe('aug'); // III+ in harmonic minor
+  });
+
+  it('noteCount defaults to 4 (backward compatible)', () => {
+    const a = padGetDiatonicTetrads(SCALES[0].pcs, 0);
+    const b = padGetDiatonicTetrads(SCALES[0].pcs, 0, 4);
+    expect(a).toEqual(b);
+  });
 });
 
 describe('padFindParentScales', () => {

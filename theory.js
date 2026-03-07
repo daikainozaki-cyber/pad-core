@@ -257,10 +257,11 @@ function padGetBuilderChordName(root, quality, tension, bass, scaleIdx, key) {
   return name;
 }
 
-// ======== DIATONIC TETRADS ========
+// ======== DIATONIC CHORDS (Triads & Tetrads) ========
 
-function padGetDiatonicTetrads(scalePCS, key) {
+function padGetDiatonicTetrads(scalePCS, key, noteCount) {
   if (scalePCS.length !== 7) return [];
+  if (noteCount === undefined) noteCount = 4;
   var ROMAN = ['I','II','III','IV','V','VI','VII'];
   var tetrads = [];
   for (var i = 0; i < 7; i++) {
@@ -268,23 +269,40 @@ function padGetDiatonicTetrads(scalePCS, key) {
     var i3 = ((scalePCS[(i + 2) % 7] - rootIv) + 12) % 12;
     var i5 = ((scalePCS[(i + 4) % 7] - rootIv) + 12) % 12;
     var i7 = ((scalePCS[(i + 6) % 7] - rootIv) + 12) % 12;
-    var pcs = [0, i3, i5, i7];
 
-    var quality = null;
-    for (var r = 0; r < BUILDER_QUALITIES.length; r++) {
-      for (var c = 0; c < BUILDER_QUALITIES[r].length; c++) {
-        var q = BUILDER_QUALITIES[r][c];
-        if (q && q.pcs.length === 4 &&
-            q.pcs[1] === i3 && q.pcs[2] === i5 && q.pcs[3] === i7) {
-          quality = q; break;
+    var pcs, quality;
+    if (noteCount === 3) {
+      pcs = [0, i3, i5];
+      quality = null;
+      for (var r = 0; r < BUILDER_QUALITIES.length; r++) {
+        for (var c = 0; c < BUILDER_QUALITIES[r].length; c++) {
+          var q = BUILDER_QUALITIES[r][c];
+          if (q && q.pcs.length === 3 &&
+              q.pcs[1] === i3 && q.pcs[2] === i5) {
+            quality = q; break;
+          }
         }
+        if (quality) break;
       }
-      if (quality) break;
+      if (!quality) quality = {name:'?', label:'?', pcs: pcs};
+    } else {
+      pcs = [0, i3, i5, i7];
+      quality = null;
+      for (var r = 0; r < BUILDER_QUALITIES.length; r++) {
+        for (var c = 0; c < BUILDER_QUALITIES[r].length; c++) {
+          var q = BUILDER_QUALITIES[r][c];
+          if (q && q.pcs.length === 4 &&
+              q.pcs[1] === i3 && q.pcs[2] === i5 && q.pcs[3] === i7) {
+            quality = q; break;
+          }
+        }
+        if (quality) break;
+      }
+      if (!quality && i3 === 4 && i5 === 8 && i7 === 11) {
+        quality = {name:'aug\u25B37', label:'aug\u25B37', pcs:[0,4,8,11]};
+      }
+      if (!quality) quality = {name:'?', label:'?', pcs: pcs};
     }
-    if (!quality && i3 === 4 && i5 === 8 && i7 === 11) {
-      quality = {name:'aug\u25B37', label:'aug\u25B37', pcs:[0,4,8,11]};
-    }
-    if (!quality) quality = {name:'?', label:'?', pcs: pcs};
 
     var rootPC = (rootIv + key) % 12;
     var parentKey = padGetParentMajorKey(0, key);
@@ -292,15 +310,26 @@ function padGetDiatonicTetrads(scalePCS, key) {
 
     var roman = ROMAN[i];
     var suffix;
-    switch (quality.name) {
-      case '\u25B37': suffix = '\u25B37'; break;
-      case '7':       suffix = '7'; break;
-      case 'm7':      roman = roman.toLowerCase(); suffix = '7'; break;
-      case 'm\u25B37': roman = roman.toLowerCase(); suffix = '\u25B37'; break;
-      case 'm7(b5)':  roman = roman.toLowerCase(); suffix = '\u00F87'; break;
-      case 'dim7':    roman = roman.toLowerCase(); suffix = '\u00B07'; break;
-      case 'aug\u25B37': suffix = '+\u25B37'; break;
-      default:        suffix = ''; break;
+    if (noteCount === 3) {
+      // Triad roman numerals: same convention as tetrads (upper + suffix)
+      switch (quality.name) {
+        case '':    suffix = ''; break;              // Major triad
+        case 'm':   suffix = 'm'; break;
+        case 'dim': suffix = 'dim'; break;
+        case 'aug': suffix = '+'; break;
+        default:    suffix = ''; break;
+      }
+    } else {
+      switch (quality.name) {
+        case '\u25B37': suffix = '\u25B37'; break;
+        case '7':       suffix = '7'; break;
+        case 'm7':      roman = roman.toLowerCase(); suffix = '7'; break;
+        case 'm\u25B37': roman = roman.toLowerCase(); suffix = '\u25B37'; break;
+        case 'm7(b5)':  roman = roman.toLowerCase(); suffix = '\u00F87'; break;
+        case 'dim7':    roman = roman.toLowerCase(); suffix = '\u00B07'; break;
+        case 'aug\u25B37': suffix = '+\u25B37'; break;
+        default:        suffix = ''; break;
+      }
     }
     var degree = roman + suffix;
 

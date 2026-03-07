@@ -82,6 +82,7 @@ const TENSION_ROWS = [
   // Row 0
   [
     {label:'sus4', mods:{replace3:5}},
+    {label:'sus2', mods:{replace3:2}},
     {label:'aug', mods:{sharp5:true}},
     {label:'6', mods:{add:[9]}},
     {label:'9', mods:{add:[2]}},
