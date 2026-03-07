@@ -31,3 +31,6 @@ Object.assign(globalThis, theory);
 
 const render = require('../../render.js');
 Object.assign(globalThis, render);
+
+const circle = require('../../circle.js');
+Object.assign(globalThis, circle);
