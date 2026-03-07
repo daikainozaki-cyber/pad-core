@@ -677,6 +677,25 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
   if (!options) options = {};
   var minNotes = options.minNotes !== undefined ? options.minNotes : 3;
   var maxResults = options.maxResults !== undefined ? options.maxResults : 15;
+  var allowRootless = !!options.allowRootless;
+  var noOpen = !!options.noOpen; // funk/soul: no open strings (can't mute for tight rhythm)
+
+  // Fifth is optional when chord has tensions (9th+), since guitar has only 6 strings.
+  // BUT: altered 5ths (b5=6, #5=8) that REPLACE the natural 5th define chord quality
+  // (dim, m7b5, aug) and must NOT be omitted.
+  // When both natural 5th and b5/#5 coexist (e.g. #11 = compound b5), 5th is still optional.
+  var hasTensions = false;
+  var hasNatural5th = false;
+  var hasAltered5th = false;
+  for (var i = 0; i < chordPCS.length; i++) {
+    if (chordPCS[i] >= 13) hasTensions = true;
+    var iv = chordPCS[i] % 12;
+    if (iv === 7) hasNatural5th = true;
+    if (iv === 6 || iv === 8) hasAltered5th = true;
+  }
+  var alteredFifthIsChordTone = hasAltered5th && !hasNatural5th;
+  // fifthOptional option: jazz/bossa fingerstyle (4 fingers = 4 strings practical limit)
+  var fifthIsOptional = (hasTensions || !!options.fifthOptional) && !alteredFifthIsChordTone;
 
   // Compute absolute pitch class set
   var chordAbsPCS = {};
@@ -702,7 +721,7 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
   for (var s = 0; s < numStrings; s++) {
     var openPC = tuning[s] % 12;
     var cands = [null];
-    for (var f = 0; f <= maxFrets; f++) {
+    for (var f = (noOpen ? 1 : 0); f <= maxFrets; f++) {
       if (chordAbsPCS[(openPC + f) % 12]) cands.push(f);
     }
     candidates.push(cands);
@@ -717,21 +736,74 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       var span = (fMin <= fMax) ? fMax - fMin + 1 : 0;
       if (span > maxSpan) return;
 
-      // Collect pitch classes and find bass (lowest MIDI)
+      // Collect pitch classes, MIDI notes, and find bass (lowest MIDI)
       var notePCs = {};
+      var midiNotes = {};
       var lowestMidi = Infinity, lowestPC = -1;
       for (var i = 0; i < numStrings; i++) {
         if (chosen[i] !== null) {
           var midi = tuning[i] + chosen[i];
           notePCs[midi % 12] = true;
+          // Unison avoidance: reject exact same MIDI note on two strings
+          if (midiNotes[midi]) return;
+          midiNotes[midi] = true;
           if (midi < lowestMidi) { lowestMidi = midi; lowestPC = midi % 12; }
         }
       }
 
-      // Filter: must have root
-      if (!notePCs[rootPC]) return;
+      // Filter: must have root (unless rootless allowed)
+      var isRootless = !notePCs[rootPC];
+      if (isRootless && !allowRootless) return;
       // Filter: must have 3rd if chord defines one
       if (hasThirdInChord && !notePCs[third3PC] && !notePCs[third4PC]) return;
+      // Filter: non-tension chords require all pitch classes present
+      // Tension chords (9th+) allow 5th omission for playability
+      if (!fifthIsOptional) {
+        for (var pc in chordAbsPCS) {
+          if (isRootless && parseInt(pc) === rootPC) continue;
+          if (!notePCs[pc]) return;
+        }
+      }
+
+      // Finger unit feasibility: max 4 fingers available
+      // Lowest fret = barre candidate (1 unit even if non-adjacent strings)
+      // Higher frets: each contiguous group of strings = 1 unit
+      var fretGroups = {};
+      var minFrettedFret = Infinity;
+      for (var i = 0; i < numStrings; i++) {
+        if (chosen[i] !== null && chosen[i] > 0) {
+          if (!fretGroups[chosen[i]]) fretGroups[chosen[i]] = [];
+          fretGroups[chosen[i]].push(i);
+          if (chosen[i] < minFrettedFret) minFrettedFret = chosen[i];
+        }
+      }
+      var fingerUnits = 0;
+      for (var fret in fretGroups) {
+        if (parseInt(fret) === minFrettedFret) {
+          fingerUnits += 1; // barre candidate: 1 unit
+        } else {
+          var strs = fretGroups[fret].slice().sort(function(a, b) { return a - b; });
+          var groups = 1;
+          for (var i = 1; i < strs.length; i++) {
+            if (strs[i] !== strs[i - 1] + 1) groups++;
+          }
+          fingerUnits += groups;
+        }
+      }
+      if (fingerUnits > 4) return;
+
+      // Above-barre spread check: notes above the barre must be within a
+      // 4-string window (hand can't span the whole neck above a barre)
+      if (minFrettedFret < Infinity) {
+        var aboveMinStr = -1, aboveMaxStr = -1;
+        for (var i = 0; i < numStrings; i++) {
+          if (chosen[i] !== null && chosen[i] > minFrettedFret) {
+            if (aboveMinStr === -1) aboveMinStr = i;
+            aboveMaxStr = i;
+          }
+        }
+        if (aboveMaxStr - aboveMinStr > 3) return;
+      }
 
       // Count gaps (muted strings between outermost sounding strings)
       var hiStr = -1, loStr = -1; // hiStr = lowest index (highest pitch)
@@ -749,10 +821,13 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       results.push({
         frets: chosen.slice(),
         bassPC: lowestPC,
+        bassString: loStr,
         rootInBass: lowestPC === rootPC,
+        isRootless: isRootless,
         stringCount: count,
         span: span,
         gaps: gaps,
+        fingerUnits: fingerUnits,
       });
       return;
     }
@@ -788,12 +863,43 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       if (r.frets[i] !== null && r.frets[i] > 0) { avgFret += r.frets[i]; n++; }
     }
     avgFret = n > 0 ? avgFret / n : 0;
+    // CAGED root string bonus: 6th (E form), 5th (A form), 4th (D form)
+    // Index: 5=6th string, 4=5th string, 3=4th string
+    var rootStrBonus = 0;
+    if (r.rootInBass && numStrings === 6) {
+      if (r.bassString === 5) rootStrBonus = 50;      // 6th string root (E form)
+      else if (r.bassString === 4) rootStrBonus = 30;  // 5th string root (A form)
+      else if (r.bassString === 3) rootStrBonus = 20;  // 4th string root (D form)
+    }
+    // Top-4-string comping bonus: strings 1-4 only (jazz/funk standard)
+    var top4Bonus = 0;
+    if (numStrings === 6 && r.frets[4] === null && r.frets[5] === null) {
+      var soundingCount = 0;
+      for (var i = 0; i < 4; i++) { if (r.frets[i] !== null) soundingCount++; }
+      if (soundingCount >= 3) top4Bonus = 80;
+    }
     return (r.rootInBass ? 1000 : 0)
+      + rootStrBonus
+      + top4Bonus
       + r.stringCount * 30
-      - avgFret * 20
+      - avgFret * 8
       - r.span * 10
       - r.gaps * 15;
   }
+
+  if (allowRootless) {
+    // Partition: rooted first, rootless after (each sorted independently)
+    var rooted = [], rootless = [];
+    for (var i = 0; i < results.length; i++) {
+      if (results[i].isRootless) rootless.push(results[i]);
+      else rooted.push(results[i]);
+    }
+    rooted.sort(function(a, b) { return sortScore(b) - sortScore(a); });
+    rootless.sort(function(a, b) { return sortScore(b) - sortScore(a); });
+    var maxRootless = options.maxRootless !== undefined ? options.maxRootless : 5;
+    return rooted.slice(0, maxResults).concat(rootless.slice(0, maxRootless));
+  }
+
   results.sort(function(a, b) {
     return sortScore(b) - sortScore(a);
   });

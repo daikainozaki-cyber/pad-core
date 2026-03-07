@@ -616,4 +616,189 @@ describe('padEnumGuitarChordForms', () => {
       expect(f.gaps).toBe(gaps);
     }
   });
+
+  // --- Unison avoidance ---
+  it('no form has two strings with the exact same MIDI note', () => {
+    const forms = padEnumGuitarChordForms([0, 3, 7], 0, GUITAR, 21, 4);
+    for (const f of forms) {
+      const midis = [];
+      for (let s = 0; s < GUITAR.length; s++) {
+        if (f.frets[s] !== null) midis.push(GUITAR[s] + f.frets[s]);
+      }
+      const uniqueMidis = new Set(midis);
+      expect(uniqueMidis.size).toBe(midis.length);
+    }
+  });
+
+  it('octave duplicates (same PC, different octave) are allowed', () => {
+    // E major: open E chord has E on strings 1 and 6 (different octaves)
+    const forms = padEnumGuitarChordForms([0, 4, 7], 4, GUITAR, 21, 4);
+    // Open E: 0,0,1,2,2,0 → string 0 (E4=64) and string 5 (E2=40)
+    const openE = forms.find(f =>
+      f.frets[0] === 0 && f.frets[1] === 0 && f.frets[2] === 1 &&
+      f.frets[3] === 2 && f.frets[4] === 2 && f.frets[5] === 0
+    );
+    expect(openE).toBeDefined();
+    expect(openE.stringCount).toBe(6);
+  });
+
+  // --- Fifth omission ---
+  it('C9 forms can omit the 5th (G) — tension chord', () => {
+    // C9 = [0, 4, 7, 10, 14], has 9th (>=13) → 5th optional
+    const forms = padEnumGuitarChordForms([0, 4, 7, 10, 14], 0, GUITAR, 21, 4);
+    const formsWithout5th = forms.filter(f => {
+      const pcs = new Set();
+      for (let s = 0; s < GUITAR.length; s++) {
+        if (f.frets[s] !== null) pcs.add((GUITAR[s] + f.frets[s]) % 12);
+      }
+      return !pcs.has(7); // G = pitch class 7
+    });
+    expect(formsWithout5th.length).toBeGreaterThan(0);
+  });
+
+  it('C7 requires 5th (no tensions, not optional)', () => {
+    // C7 = [0, 4, 7, 10], no interval >= 13 → all PCs required
+    const forms = padEnumGuitarChordForms([0, 4, 7, 10], 0, GUITAR, 21, 4);
+    for (const f of forms) {
+      const pcs = new Set();
+      for (let s = 0; s < GUITAR.length; s++) {
+        if (f.frets[s] !== null) pcs.add((GUITAR[s] + f.frets[s]) % 12);
+      }
+      expect(pcs.has(7)).toBe(true); // G must be present
+    }
+  });
+
+  it('triads still require all notes', () => {
+    const forms = padEnumGuitarChordForms([0, 4, 7], 0, GUITAR, 21, 4);
+    for (const f of forms) {
+      const pcs = new Set();
+      for (let s = 0; s < GUITAR.length; s++) {
+        if (f.frets[s] !== null) pcs.add((GUITAR[s] + f.frets[s]) % 12);
+      }
+      expect(pcs.has(7)).toBe(true); // G must be present
+    }
+  });
+
+  // --- Rootless voicings ---
+  it('allowRootless: forms without root appear', () => {
+    const forms = padEnumGuitarChordForms([0, 4, 7, 10], 0, GUITAR, 21, 4, { allowRootless: true, maxResults: 50 });
+    const rootless = forms.filter(f => f.isRootless);
+    expect(rootless.length).toBeGreaterThan(0);
+    // All rootless forms should have isRootless flag
+    for (const f of rootless) {
+      const pcs = new Set();
+      for (let s = 0; s < GUITAR.length; s++) {
+        if (f.frets[s] !== null) pcs.add((GUITAR[s] + f.frets[s]) % 12);
+      }
+      expect(pcs.has(0)).toBe(false); // no C
+    }
+  });
+
+  it('allowRootless: rooted forms rank higher than rootless', () => {
+    const forms = padEnumGuitarChordForms([0, 4, 7, 10], 0, GUITAR, 21, 4, { allowRootless: true, maxResults: 50 });
+    const firstRootless = forms.findIndex(f => f.isRootless);
+    const lastRooted = forms.reduce((acc, f, i) => !f.isRootless ? i : acc, -1);
+    if (firstRootless >= 0 && lastRooted >= 0) {
+      // At least some rooted forms should come before rootless
+      expect(firstRootless).toBeGreaterThan(0);
+    }
+  });
+
+  it('default: no rootless forms appear', () => {
+    const forms = padEnumGuitarChordForms([0, 4, 7, 10], 0, GUITAR, 21, 4);
+    for (const f of forms) {
+      expect(f.isRootless).toBe(false);
+    }
+  });
+
+  it('isRootless flag exists on all forms', () => {
+    const forms = padEnumGuitarChordForms([0, 4, 7], 0, GUITAR, 21, 4);
+    for (const f of forms) {
+      expect(typeof f.isRootless).toBe('boolean');
+    }
+  });
+
+  // --- Finger unit constraint ---
+  it('all forms need at most 4 finger units', () => {
+    const forms = padEnumGuitarChordForms([0, 4, 7, 10], 0, GUITAR, 21, 4);
+    for (const f of forms) {
+      expect(f.fingerUnits).toBeLessThanOrEqual(4);
+    }
+  });
+
+  it('open C chord needs 3 finger units', () => {
+    // x32010 → frets 1,2,3 each = 1 unit = 3 total
+    const forms = padEnumGuitarChordForms([0, 4, 7], 0, GUITAR, 21, 4);
+    const openC = forms.find(f =>
+      f.frets[0] === 0 && f.frets[1] === 1 && f.frets[2] === 0 &&
+      f.frets[3] === 2 && f.frets[4] === 3 && f.frets[5] === null
+    );
+    expect(openC).toBeDefined();
+    expect(openC.fingerUnits).toBe(3);
+  });
+
+  it('fingerUnits field exists on all forms', () => {
+    const forms = padEnumGuitarChordForms([0, 4, 7], 0, GUITAR, 21, 4);
+    for (const f of forms) {
+      expect(typeof f.fingerUnits).toBe('number');
+      expect(f.fingerUnits).toBeGreaterThan(0);
+    }
+  });
+
+  // --- Altered 5th protection ---
+  it('Cm7b5 forms always include b5', () => {
+    // Cm7b5 = [0, 3, 6, 10], b5 replaces natural 5th → must keep
+    const forms = padEnumGuitarChordForms([0, 3, 6, 10], 0, GUITAR, 21, 4);
+    for (const f of forms) {
+      const pcs = new Set();
+      for (let s = 0; s < GUITAR.length; s++) {
+        if (f.frets[s] !== null) pcs.add((GUITAR[s] + f.frets[s]) % 12);
+      }
+      expect(pcs.has(6)).toBe(true); // Gb = pitch class 6
+    }
+  });
+
+  it('Caug forms always include #5', () => {
+    // Caug = [0, 4, 8], #5 replaces natural 5th → must keep
+    const forms = padEnumGuitarChordForms([0, 4, 8], 0, GUITAR, 21, 4);
+    for (const f of forms) {
+      const pcs = new Set();
+      for (let s = 0; s < GUITAR.length; s++) {
+        if (f.frets[s] !== null) pcs.add((GUITAR[s] + f.frets[s]) % 12);
+      }
+      expect(pcs.has(8)).toBe(true); // Ab = pitch class 8
+    }
+  });
+
+  // --- noOpen (funk/soul: no open strings) ---
+  it('noOpen: no form uses fret 0', () => {
+    const forms = padEnumGuitarChordForms([0, 4, 7], 0, GUITAR, 21, 4, { noOpen: true });
+    expect(forms.length).toBeGreaterThan(0);
+    for (const f of forms) {
+      expect(f.frets).not.toContain(0);
+    }
+  });
+
+  it('noOpen: Cmaj7 top results are closed position', () => {
+    const forms = padEnumGuitarChordForms([0, 4, 7, 11], 0, GUITAR, 21, 4, { noOpen: true });
+    expect(forms.length).toBeGreaterThan(0);
+    for (const f of forms) {
+      for (let s = 0; s < GUITAR.length; s++) {
+        if (f.frets[s] !== null) expect(f.frets[s]).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('C7(#11) can omit 5th (natural 5th + tension coexist)', () => {
+    // C7(#11) = [0, 4, 7, 10, 18], has tensions, natural 5th present, #11 is tension
+    const forms = padEnumGuitarChordForms([0, 4, 7, 10, 18], 0, GUITAR, 21, 4);
+    const without5th = forms.filter(f => {
+      const pcs = new Set();
+      for (let s = 0; s < GUITAR.length; s++) {
+        if (f.frets[s] !== null) pcs.add((GUITAR[s] + f.frets[s]) % 12);
+      }
+      return !pcs.has(7);
+    });
+    expect(without5th.length).toBeGreaterThan(0);
+  });
 });
