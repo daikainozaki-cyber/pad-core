@@ -878,9 +878,27 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       for (var i = 0; i < 4; i++) { if (r.frets[i] !== null) soundingCount++; }
       if (soundingCount >= 3) top4Bonus = 80;
     }
+    // Guide tone bonus: 3rd + 7th both present = harmonically complete voicing
+    // Shell voicing core (R37/R73) and extended forms (R573 etc.) rank higher
+    var guideToneBonus = 0;
+    var has3rdInForm = false, has7thInForm = false;
+    for (var i = 0; i < r.frets.length; i++) {
+      if (r.frets[i] !== null) {
+        var pc = (tuning[i] + r.frets[i]) % 12;
+        if (pc === third3PC || pc === third4PC) has3rdInForm = true;
+        if (hasThirdInChord) {
+          // 7th = minor 7th (10) or major 7th (11) from root
+          var fromRoot = ((pc - rootPC) + 12) % 12;
+          if (fromRoot === 10 || fromRoot === 11) has7thInForm = true;
+        }
+      }
+    }
+    if (has3rdInForm && has7thInForm) guideToneBonus = 40;
+
     return (r.rootInBass ? 1000 : 0)
       + rootStrBonus
       + top4Bonus
+      + guideToneBonus
       + r.stringCount * 30
       - avgFret * 8
       - r.span * 10
