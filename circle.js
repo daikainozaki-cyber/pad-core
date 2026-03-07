@@ -210,10 +210,10 @@ function padRenderCircleOfFifths(svgEl, options) {
   };
 
   // Fixed coordinate system — SVG viewBox handles scaling
-  var CX = 350, CY = 350;
+  var CX = 380, CY = 380;
   var OUTER_R = 280, INNER_R = 200, CENTER_R = 120;
   var ANGLE_PER_SEG = 30;
-  var DEGREE_R = 25, MINOR_DEGREE_R = 16;
+
 
   function svgNS(tag) {
     return document.createElementNS('http://www.w3.org/2000/svg', tag);
@@ -226,24 +226,66 @@ function padRenderCircleOfFifths(svgEl, options) {
   function render() {
     clearSvg();
 
-    svgEl.setAttribute('viewBox', '0 0 700 700');
+    svgEl.setAttribute('viewBox', '0 0 760 760');
     svgEl.setAttribute('width', state.size);
     svgEl.setAttribute('height', state.size);
+
+    // --- Build degree-to-segment maps ---
+    var majorDegreeMap = {};
+    var minorDegreeMap = {};
+    var hasDegreeSelection = state.showDegrees && state.selectedKeyIndex !== null && state.selectedType;
+
+    if (hasDegreeSelection) {
+      var degTable;
+      if (state.selectedType === 'major') {
+        degTable = PAD_CIRCLE_MAJOR_DIATONIC;
+      } else {
+        if (state.scaleMode === 'harmonic') degTable = PAD_CIRCLE_MINOR_DIATONIC_HARMONIC;
+        else if (state.scaleMode === 'melodic') degTable = PAD_CIRCLE_MINOR_DIATONIC_MELODIC;
+        else degTable = PAD_CIRCLE_MINOR_DIATONIC_NATURAL;
+      }
+
+      degTable.forEach(function(deg) {
+        if (!deg.isDiatonic) return; // Show only selected mode's diatonic degrees
+        var off = deg.circleOffset !== undefined ? deg.circleOffset : deg.offset;
+        var ti = (state.selectedKeyIndex + off + 12) % 12;
+        if (state.selectedType === 'major' && !deg.isMajor) {
+          ti = (ti + 9) % 12;
+        }
+        var map = deg.isMajor ? majorDegreeMap : minorDegreeMap;
+        if (!map[ti]) map[ti] = [];
+        map[ti].push(deg);
+      });
+    }
 
     // --- Segments ---
     PAD_CIRCLE_KEYS.forEach(function(key, index) {
       var startAngle = index * ANGLE_PER_SEG - ANGLE_PER_SEG / 2;
       var endAngle = startAngle + ANGLE_PER_SEG;
       var midAngle = startAngle + ANGLE_PER_SEG / 2;
-      var isSelected = state.selectedKeyIndex === index;
 
-      // Major segment
+      // Degree info for this segment
+      var majDegs = majorDegreeMap[index];
+      var minDegs = minorDegreeMap[index];
+
+      // --- Major segment ---
+      var majorFill = colors.majorSegment;
+      var majorFillOp = '1';
+      if (majDegs) {
+        var majPri = majDegs.find(function(d) { return d.isDiatonic; }) || majDegs[0];
+        majorFill = colors[majPri.colorType];
+        majorFillOp = majPri.isDiatonic ? '1' : '0.5';
+      } else if (hasDegreeSelection) {
+        majorFillOp = '0.35';
+      }
+
       var majorD = padCircleCreateSegmentPath(CX, CY, INNER_R, OUTER_R, startAngle, endAngle);
       var majorSeg = svgNS('path');
       majorSeg.setAttribute('d', majorD);
-      majorSeg.setAttribute('fill', colors.majorSegment);
-      majorSeg.setAttribute('stroke', isSelected && state.selectedType === 'major' ? colors.selectedStroke : colors.segmentStroke);
-      majorSeg.setAttribute('stroke-width', isSelected && state.selectedType === 'major' ? '3' : '2');
+      majorSeg.setAttribute('fill', majorFill);
+      majorSeg.setAttribute('fill-opacity', majorFillOp);
+      majorSeg.setAttribute('stroke', colors.segmentStroke);
+      majorSeg.setAttribute('stroke-width', '2');
       majorSeg.setAttribute('cursor', 'pointer');
       majorSeg.addEventListener('click', (function(i) {
         return function() {
@@ -255,7 +297,7 @@ function padRenderCircleOfFifths(svgEl, options) {
       })(index));
       svgEl.appendChild(majorSeg);
 
-      // Major text
+      // Major key text (always visible)
       var majorPos = padCirclePolarToCartesian(CX, CY, (OUTER_R + INNER_R) / 2, midAngle);
       var majorText = svgNS('text');
       majorText.setAttribute('x', majorPos.x);
@@ -264,19 +306,50 @@ function padRenderCircleOfFifths(svgEl, options) {
       majorText.setAttribute('dominant-baseline', 'middle');
       majorText.setAttribute('font-size', '22');
       majorText.setAttribute('font-weight', '600');
-      majorText.setAttribute('fill', colors.majorText);
+      majorText.setAttribute('fill', majDegs ? 'rgba(255,255,255,0.95)' : colors.majorText);
       majorText.setAttribute('pointer-events', 'none');
       majorText.setAttribute('style', 'text-rendering: optimizeLegibility;');
+      if (hasDegreeSelection && !majDegs) majorText.setAttribute('fill-opacity', '0.4');
       majorText.textContent = key.major;
       svgEl.appendChild(majorText);
 
-      // Minor segment
+      // Major degree label (outside the outer ring)
+      if (majDegs) {
+        var majDegPos = padCirclePolarToCartesian(CX, CY, OUTER_R + 20, midAngle);
+        var seen = {}, labels = [];
+        majDegs.forEach(function(d) { if (!seen[d.roman]) { labels.push(d.roman); seen[d.roman] = true; } });
+        var majDegText = svgNS('text');
+        majDegText.setAttribute('x', majDegPos.x);
+        majDegText.setAttribute('y', majDegPos.y);
+        majDegText.setAttribute('text-anchor', 'middle');
+        majDegText.setAttribute('dominant-baseline', 'middle');
+        majDegText.setAttribute('font-size', '14');
+        majDegText.setAttribute('font-weight', '700');
+        majDegText.setAttribute('fill', 'white');
+        majDegText.setAttribute('pointer-events', 'none');
+        majDegText.setAttribute('style', 'text-rendering: optimizeLegibility;');
+        majDegText.textContent = labels.join('/');
+        svgEl.appendChild(majDegText);
+      }
+
+      // --- Minor segment ---
+      var minorFill = colors.minorSegment;
+      var minorFillOp = '1';
+      if (minDegs) {
+        var minPri = minDegs.find(function(d) { return d.isDiatonic; }) || minDegs[0];
+        minorFill = colors[minPri.colorType];
+        minorFillOp = minPri.isDiatonic ? '1' : '0.5';
+      } else if (hasDegreeSelection) {
+        minorFillOp = '0.35';
+      }
+
       var minorD = padCircleCreateSegmentPath(CX, CY, CENTER_R, INNER_R, startAngle, endAngle);
       var minorSeg = svgNS('path');
       minorSeg.setAttribute('d', minorD);
-      minorSeg.setAttribute('fill', colors.minorSegment);
-      minorSeg.setAttribute('stroke', isSelected && state.selectedType === 'minor' ? colors.selectedStroke : colors.segmentStroke);
-      minorSeg.setAttribute('stroke-width', isSelected && state.selectedType === 'minor' ? '3' : '2');
+      minorSeg.setAttribute('fill', minorFill);
+      minorSeg.setAttribute('fill-opacity', minorFillOp);
+      minorSeg.setAttribute('stroke', colors.segmentStroke);
+      minorSeg.setAttribute('stroke-width', '2');
       minorSeg.setAttribute('cursor', 'pointer');
       minorSeg.addEventListener('click', (function(i) {
         return function() {
@@ -288,7 +361,7 @@ function padRenderCircleOfFifths(svgEl, options) {
       })(index));
       svgEl.appendChild(minorSeg);
 
-      // Minor text
+      // Minor key text (always visible)
       var minorPos = padCirclePolarToCartesian(CX, CY, (INNER_R + CENTER_R) / 2, midAngle);
       var minorText = svgNS('text');
       minorText.setAttribute('x', minorPos.x);
@@ -297,11 +370,31 @@ function padRenderCircleOfFifths(svgEl, options) {
       minorText.setAttribute('dominant-baseline', 'middle');
       minorText.setAttribute('font-size', '16');
       minorText.setAttribute('font-weight', '500');
-      minorText.setAttribute('fill', colors.minorText);
+      minorText.setAttribute('fill', minDegs ? 'rgba(255,255,255,0.95)' : colors.minorText);
       minorText.setAttribute('pointer-events', 'none');
       minorText.setAttribute('style', 'text-rendering: optimizeLegibility;');
+      if (hasDegreeSelection && !minDegs) minorText.setAttribute('fill-opacity', '0.4');
       minorText.textContent = key.minor;
       svgEl.appendChild(minorText);
+
+      // Minor degree label (near center edge)
+      if (minDegs) {
+        var minDegPos = padCirclePolarToCartesian(CX, CY, CENTER_R + 15, midAngle);
+        var seenMin = {}, labelsMin = [];
+        minDegs.forEach(function(d) { if (!seenMin[d.roman]) { labelsMin.push(d.roman); seenMin[d.roman] = true; } });
+        var minDegText = svgNS('text');
+        minDegText.setAttribute('x', minDegPos.x);
+        minDegText.setAttribute('y', minDegPos.y);
+        minDegText.setAttribute('text-anchor', 'middle');
+        minDegText.setAttribute('dominant-baseline', 'middle');
+        minDegText.setAttribute('font-size', '12');
+        minDegText.setAttribute('font-weight', '700');
+        minDegText.setAttribute('fill', 'white');
+        minDegText.setAttribute('pointer-events', 'none');
+        minDegText.setAttribute('style', 'text-rendering: optimizeLegibility;');
+        minDegText.textContent = labelsMin.join('/');
+        svgEl.appendChild(minDegText);
+      }
     });
 
     // --- Center circle ---
@@ -311,6 +404,23 @@ function padRenderCircleOfFifths(svgEl, options) {
     centerCircle.setAttribute('r', CENTER_R);
     centerCircle.setAttribute('fill', colors.centerFill);
     svgEl.appendChild(centerCircle);
+
+    // --- Selection highlight (overlay after center circle, uniform grid preserved) ---
+    if (state.selectedKeyIndex !== null && state.selectedType) {
+      var selIdx = state.selectedKeyIndex;
+      var selStart = selIdx * ANGLE_PER_SEG - ANGLE_PER_SEG / 2;
+      var selEnd = selStart + ANGLE_PER_SEG;
+      var selInner = state.selectedType === 'major' ? INNER_R : CENTER_R;
+      var selOuter = state.selectedType === 'major' ? OUTER_R : INNER_R;
+      var selD = padCircleCreateSegmentPath(CX, CY, selInner, selOuter, selStart, selEnd);
+      var selHighlight = svgNS('path');
+      selHighlight.setAttribute('d', selD);
+      selHighlight.setAttribute('fill', 'none');
+      selHighlight.setAttribute('stroke', colors.selectedStroke);
+      selHighlight.setAttribute('stroke-width', '4');
+      selHighlight.setAttribute('pointer-events', 'none');
+      svgEl.appendChild(selHighlight);
+    }
 
     // --- Title ---
     if (state.showTitle) {
@@ -339,113 +449,53 @@ function padRenderCircleOfFifths(svgEl, options) {
       svgEl.appendChild(title2);
     }
 
-    // --- Scale mode buttons (minor only) ---
+    // --- Scale mode toggle (minor only, compact inline labels) ---
     if (state.showScaleModeButtons && state.selectedType === 'minor') {
-      var isNatural = state.scaleMode === 'natural';
-      var isHarmonic = state.scaleMode === 'harmonic';
-      var isMelodic = state.scaleMode === 'melodic';
-
-      var btnW = 90, btnH = 36, btnGap = 8, btnRx = 6;
-      var totalW = btnW * 3 + btnGap * 2;
-      var btnY = CY + 2;
-      var btnStartX = CX - totalW / 2;
-
-      var modeButtons = [
-        { label: 'Natural', active: isNatural, mode: 'natural', color: colors.buttonNatural },
-        { label: 'Harmonic', active: isHarmonic, mode: 'harmonic', color: colors.buttonHarmonic },
-        { label: 'Melodic', active: isMelodic, mode: 'melodic', color: colors.buttonMelodic }
+      var modes = [
+        { key: 'natural', label: 'Nat', color: colors.buttonNatural },
+        { key: 'harmonic', label: 'Harm', color: colors.buttonHarmonic },
+        { key: 'melodic', label: 'Mel', color: colors.buttonMelodic }
       ];
+      var labelY = CY + 55;
+      var gap = 8;
+      var itemW = 52;
+      var totalW = itemW * 3 + gap * 2;
+      var startX = CX - totalW / 2;
 
-      modeButtons.forEach(function(btn, i) {
-        var bx = btnStartX + i * (btnW + btnGap);
+      modes.forEach(function(m, i) {
+        var mx = startX + i * (itemW + gap);
+        var isActive = state.scaleMode === m.key;
 
-        var rect = svgNS('rect');
-        rect.setAttribute('x', bx);
-        rect.setAttribute('y', btnY);
-        rect.setAttribute('width', btnW);
-        rect.setAttribute('height', btnH);
-        rect.setAttribute('rx', btnRx);
-        rect.setAttribute('fill', btn.active ? btn.color : colors.buttonBg);
-        rect.setAttribute('stroke', btn.color);
-        rect.setAttribute('stroke-width', '2');
-        rect.setAttribute('cursor', 'pointer');
-        rect.addEventListener('click', (function(mode) {
+        var hitArea = svgNS('rect');
+        hitArea.setAttribute('x', mx);
+        hitArea.setAttribute('y', labelY - 10);
+        hitArea.setAttribute('width', itemW);
+        hitArea.setAttribute('height', 20);
+        hitArea.setAttribute('fill', 'transparent');
+        hitArea.setAttribute('cursor', 'pointer');
+        hitArea.addEventListener('click', (function(mode) {
           return function() {
             state.scaleMode = mode;
             render();
             if (state.onScaleModeChange) state.onScaleModeChange(state.scaleMode);
           };
-        })(btn.mode));
-        svgEl.appendChild(rect);
+        })(m.key));
+        svgEl.appendChild(hitArea);
 
-        var text = svgNS('text');
-        text.setAttribute('x', bx + btnW / 2);
-        text.setAttribute('y', btnY + btnH / 2 + 5);
-        text.setAttribute('text-anchor', 'middle');
-        text.setAttribute('font-size', '14');
-        text.setAttribute('font-weight', '600');
-        text.setAttribute('fill', btn.active ? colors.buttonActiveText : btn.color);
-        text.setAttribute('pointer-events', 'none');
-        text.setAttribute('style', 'text-rendering: optimizeLegibility;');
-        text.textContent = btn.label;
-        svgEl.appendChild(text);
+        var label = svgNS('text');
+        label.setAttribute('x', mx + itemW / 2);
+        label.setAttribute('y', labelY + 2);
+        label.setAttribute('text-anchor', 'middle');
+        label.setAttribute('font-size', isActive ? '14' : '11');
+        label.setAttribute('font-weight', isActive ? '700' : '400');
+        label.setAttribute('fill', isActive ? m.color : '#888');
+        label.setAttribute('pointer-events', 'none');
+        label.setAttribute('style', 'text-rendering: optimizeLegibility;');
+        label.textContent = m.label;
+        svgEl.appendChild(label);
       });
     }
 
-    // --- Degree circles ---
-    if (state.showDegrees && state.selectedKeyIndex !== null && state.selectedType) {
-      var selectedIndex = state.selectedKeyIndex;
-      var type = state.selectedType;
-      var degrees = type === 'major' ? PAD_CIRCLE_MAJOR_DEGREES : PAD_CIRCLE_MINOR_DEGREES;
-
-      degrees.forEach(function(degree) {
-        var displayOffset = degree.circleOffset !== undefined ? degree.circleOffset : degree.offset;
-        var targetIndex = (selectedIndex + displayOffset + 12) % 12;
-
-        if (type === 'major' && !degree.isMajor) {
-          targetIndex = (targetIndex + 9) % 12;
-        }
-
-        var segStart = targetIndex * ANGLE_PER_SEG - ANGLE_PER_SEG / 2;
-        var midAngle = segStart + ANGLE_PER_SEG / 2;
-
-        var displayR;
-        if (degree.isSubstitute || degree.isMajor) {
-          displayR = OUTER_R + 30;
-        } else {
-          displayR = CENTER_R + 3;
-        }
-
-        var pos = padCirclePolarToCartesian(CX, CY, displayR, midAngle);
-
-        var degGroup = svgNS('g');
-
-        var circle = svgNS('circle');
-        circle.setAttribute('cx', pos.x);
-        circle.setAttribute('cy', degree.isMajor ? pos.y : pos.y + 15);
-        circle.setAttribute('r', degree.isMajor ? DEGREE_R : MINOR_DEGREE_R);
-        circle.setAttribute('fill', colors[degree.colorType]);
-        circle.setAttribute('fill-opacity', degree.isMajor ? '1' : '0.8');
-        circle.setAttribute('stroke', colors.degreeStroke);
-        circle.setAttribute('stroke-width', '2');
-        degGroup.appendChild(circle);
-
-        var text = svgNS('text');
-        text.setAttribute('x', pos.x);
-        text.setAttribute('y', degree.isMajor ? pos.y + 5 : pos.y + 15 + 4);
-        text.setAttribute('text-anchor', 'middle');
-        text.setAttribute('dominant-baseline', 'middle');
-        text.setAttribute('font-size', degree.isMajor ? '14' : '10');
-        text.setAttribute('font-weight', '600');
-        text.setAttribute('fill', (degree.isSubstitute || degree.colorType === 'dominant') ? colors.degreeTextAlt : colors.degreeText);
-        text.setAttribute('pointer-events', 'none');
-        text.setAttribute('style', 'text-rendering: optimizeLegibility;');
-        text.textContent = degree.roman;
-        degGroup.appendChild(text);
-
-        svgEl.appendChild(degGroup);
-      });
-    }
   }
 
   render();
