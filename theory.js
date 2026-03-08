@@ -810,19 +810,27 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       if (fingerUnits > 4) return;
 
       // Above-barre spread check: notes above the barre must be within a
-      // 4-string window (hand can't span the whole neck above a barre)
+      // reasonable window. Relaxed when fret difference is small (1-2 frets)
+      // because fingers can reach across the neck at adjacent frets easily
+      // (e.g. G chord 320003: fret 3 on strings 1 and 6, barre at fret 2).
       if (minFrettedFret < Infinity) {
-        var aboveMinStr = -1, aboveMaxStr = -1;
+        var aboveMinStr = -1, aboveMaxStr = -1, maxAboveFret = 0;
         for (var i = 0; i < numStrings; i++) {
           if (chosen[i] !== null && chosen[i] > minFrettedFret) {
             if (aboveMinStr === -1) aboveMinStr = i;
             aboveMaxStr = i;
+            if (chosen[i] > maxAboveFret) maxAboveFret = chosen[i];
           }
         }
-        if (aboveMaxStr - aboveMinStr > 3) return;
+        var aboveSpread = aboveMaxStr - aboveMinStr;
+        var aboveFretDiff = maxAboveFret - minFrettedFret;
+        // Wide spread only OK if fret difference is small (1-2 frets)
+        if (aboveSpread > 3 && aboveFretDiff > 2) return;
       }
 
       // Count gaps (muted strings between outermost sounding strings)
+      // Also count "open gaps": muted string adjacent to an open string
+      // = fingerpicking only (can't strum/mute cleanly)
       var hiStr = -1, loStr = -1; // hiStr = lowest index (highest pitch)
       for (var i = 0; i < numStrings; i++) {
         if (chosen[i] !== null) {
@@ -830,9 +838,18 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
           loStr = i;
         }
       }
-      var gaps = 0;
+      var gaps = 0, openGaps = 0;
       for (var i = hiStr + 1; i < loStr; i++) {
-        if (chosen[i] === null) gaps++;
+        if (chosen[i] === null) {
+          gaps++;
+          // Check if adjacent sounding strings include an open string
+          var prevOpen = (i > 0 && chosen[i - 1] === 0);
+          var nextOpen = false;
+          for (var j = i + 1; j < numStrings; j++) {
+            if (chosen[j] !== null) { nextOpen = (chosen[j] === 0); break; }
+          }
+          if (prevOpen || nextOpen) openGaps++;
+        }
       }
 
       results.push({
@@ -844,6 +861,7 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
         stringCount: count,
         span: span,
         gaps: gaps,
+        openGaps: openGaps,
         fingerUnits: fingerUnits,
       });
       return;
@@ -919,12 +937,19 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
     if (has3rdInForm && has7thInForm) guideToneBonus = wGuideTone;
     else if (has3rdInForm && has6thInForm && has6thInChord && !has7thInChord) guideToneBonus = wGuideTone;
 
-    // Open string bonus: open strings resonate with natural harmonics,
-    // essential for bossa/folk/singer-songwriter voicings
+    // Open string bonus/penalty: sliding scale based on fret position.
+    // Pure open chord (avgFret≈1): full bonus. Higher frets: bonus shrinks
+    // then flips to penalty. Standard barre always beats scattered open+fret.
     var openBonus = 0;
     if (!noOpen) {
+      var openCount = 0;
       for (var i = 0; i < r.frets.length; i++) {
-        if (r.frets[i] === 0) openBonus += wOpenStr;
+        if (r.frets[i] === 0) openCount++;
+      }
+      if (openCount > 0) {
+        // factor: 1.0 at avgFret=0, 0.0 at avgFret=2.5, negative above
+        var openFactor = 1 - (avgFret / 2.5);
+        openBonus = openCount * wOpenStr * openFactor;
       }
     }
 
@@ -937,7 +962,8 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       + r.stringCount * wStringCount
       - avgFret * wAvgFret
       - r.span * wSpan
-      - r.gaps * wGaps;
+      - r.gaps * wGaps
+      - r.openGaps * 40; // fingerpicking-only: mute between open strings
   }
 
   if (allowRootless) {
