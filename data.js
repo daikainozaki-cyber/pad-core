@@ -283,6 +283,7 @@ var PAD_QUALITY_INTERVALS = {
   '\u00F87':  [0, 3, 6, 10],  // ø7
   '\u00B07':  [0, 3, 6, 9],   // °7
   // Short forms
+  'mMaj7': [0, 3, 7, 11],
   'mM7':  [0, 3, 7, 11],
   '6/9':  [0, 4, 7, 9, 14],
   '7#9':  [0, 4, 7, 10, 15],
@@ -328,6 +329,8 @@ var PAD_QUALITY_DISPLAY = {
   '\u00F8': 'm7b5',  // ø
   '\u00B0': 'dim',   // °
   'M7':  'maj7',
+  'mMaj7': 'm\u25B37',  // mMaj7 → m△7
+  'mM7': 'm\u25B37',    // mM7 → m△7
 };
 
 // ======== PAD GRID CONSTANTS ========

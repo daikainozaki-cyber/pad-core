@@ -710,8 +710,14 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
     if (iv === 6 || iv === 8) hasAltered5th = true;
   }
   var alteredFifthIsChordTone = hasAltered5th && !hasNatural5th;
-  // fifthOptional option: jazz/bossa fingerstyle (4 fingers = 4 strings practical limit)
-  var fifthIsOptional = (hasTensions || !!options.fifthOptional) && !alteredFifthIsChordTone;
+  // Fifth is optional when: tensions (9th+), 7th/6th present (R37 shell is standard),
+  // or fifthOptional option. Guitar has 4 fingers = 5th is first to drop.
+  var has7or6 = false;
+  for (var i = 0; i < chordPCS.length; i++) {
+    var iv = chordPCS[i] % 12;
+    if (iv === 9 || iv === 10 || iv === 11) has7or6 = true;
+  }
+  var fifthIsOptional = (hasTensions || has7or6 || !!options.fifthOptional) && !alteredFifthIsChordTone;
 
   // Compute absolute pitch class set
   var chordAbsPCS = {};
@@ -853,6 +859,24 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
         }
       }
 
+      // Sandwiched open: open string between two fretted strings.
+      // Open string vibration clashes with fretted notes — uncommon technique.
+      var sandwichedOpen = 0;
+      for (var i = hiStr; i <= loStr; i++) {
+        if (chosen[i] !== 0) continue;
+        // Find nearest sounding string on each side
+        var leftFretted = false, rightFretted = false;
+        for (var j = i - 1; j >= 0; j--) {
+          if (chosen[j] === null) continue;
+          leftFretted = (chosen[j] > 0); break;
+        }
+        for (var j = i + 1; j < numStrings; j++) {
+          if (chosen[j] === null) continue;
+          rightFretted = (chosen[j] > 0); break;
+        }
+        if (leftFretted && rightFretted) sandwichedOpen++;
+      }
+
       results.push({
         frets: chosen.slice(),
         bassPC: lowestPC,
@@ -863,6 +887,7 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
         span: span,
         gaps: gaps,
         openGaps: openGaps,
+        sandwichedOpen: sandwichedOpen,
         fingerUnits: fingerUnits,
       });
       return;
@@ -970,7 +995,8 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       - avgFret * wAvgFret
       - r.span * wSpan
       - r.gaps * wGaps
-      - r.openGaps * 40; // fingerpicking-only: mute between open strings
+      - r.openGaps * 40 // fingerpicking-only: mute between open strings
+      - r.sandwichedOpen * 25; // open string vibration clashes with fretted neighbors
   }
 
   if (allowRootless) {

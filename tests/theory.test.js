@@ -122,6 +122,22 @@ describe('padParseChordName', () => {
     expect(r.root).toBe(0);
     expect(r.intervals).toEqual([0, 4, 7, 11]);
   });
+
+  it('parses FmMaj7 (minor-major-7)', () => {
+    const r = padParseChordName('FmMaj7');
+    expect(r).not.toBeNull();
+    expect(r.root).toBe(5);
+    expect(r.intervals).toEqual([0, 3, 7, 11]);
+    expect(r.displayName).toBe('Fm\u25B37');
+  });
+
+  it('parses CmM7 (minor-major-7 short form)', () => {
+    const r = padParseChordName('CmM7');
+    expect(r).not.toBeNull();
+    expect(r.root).toBe(0);
+    expect(r.intervals).toEqual([0, 3, 7, 11]);
+    expect(r.displayName).toBe('Cm\u25B37');
+  });
 });
 
 describe('padPitchClass', () => {
@@ -656,16 +672,17 @@ describe('padEnumGuitarChordForms', () => {
     expect(formsWithout5th.length).toBeGreaterThan(0);
   });
 
-  it('C7 requires 5th (no tensions, not optional)', () => {
-    // C7 = [0, 4, 7, 10], no interval >= 13 → all PCs required
+  it('C7 allows omitting 5th (7th present = R37 shell is standard)', () => {
+    // C7 = [0, 4, 7, 10], has 7th → 5th is optional (R-3-7 shell voicing)
     const forms = padEnumGuitarChordForms([0, 4, 7, 10], 0, GUITAR, 21, 4);
-    for (const f of forms) {
+    const formsWithout5th = forms.filter(f => {
       const pcs = new Set();
       for (let s = 0; s < GUITAR.length; s++) {
         if (f.frets[s] !== null) pcs.add((GUITAR[s] + f.frets[s]) % 12);
       }
-      expect(pcs.has(7)).toBe(true); // G must be present
-    }
+      return !pcs.has(7); // G = pitch class 7
+    });
+    expect(formsWithout5th.length).toBeGreaterThan(0);
   });
 
   it('triads still require all notes', () => {
