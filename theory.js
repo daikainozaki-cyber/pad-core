@@ -1019,6 +1019,176 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
   return results.slice(0, maxResults);
 }
 
+// ======== CHORD DETECTION ========
+// Detect chord name from MIDI notes. Returns array of {name, rootPC, score} sorted by score.
+// Uses CHORD_DETECT_DB, TRIAD_DETECT_DB, TETRAD_DETECT_DB from data.js.
+
+function padDetectChord(midiNotes) {
+  if (midiNotes.length < 2) return [];
+  var pcs = [];
+  var seen = {};
+  for (var i = 0; i < midiNotes.length; i++) {
+    var pc = midiNotes[i] % 12;
+    if (!seen[pc]) { seen[pc] = true; pcs.push(pc); }
+  }
+  pcs.sort(function(a, b) { return a - b; });
+  if (pcs.length < 2) return [];
+  var lowestPC = midiNotes[0];
+  for (var i = 1; i < midiNotes.length; i++) {
+    if (midiNotes[i] < lowestPC) lowestPC = midiNotes[i];
+  }
+  lowestPC = lowestPC % 12;
+  var candidates = [];
+  var seenNames = {};
+
+  for (var ri = 0; ri < pcs.length; ri++) {
+    var rootPC = pcs[ri];
+    var intervals = {};
+    for (var j = 0; j < pcs.length; j++) {
+      intervals[((pcs[j] - rootPC) + 12) % 12] = true;
+    }
+    for (var ci = 0; ci < CHORD_DETECT_DB.length; ci++) {
+      var chord = CHORD_DETECT_DB[ci];
+      // Exact match (allow 1 extra note)
+      if (chord.pcs.length <= pcs.length + 1) {
+        var matched = 0;
+        for (var k = 0; k < chord.pcs.length; k++) {
+          if (intervals[chord.pcs[k]]) matched++;
+        }
+        if (matched === chord.pcs.length) {
+          var extra = pcs.length - chord.pcs.length;
+          var isRootPosition = rootPC === lowestPC;
+          var score = (isRootPosition ? 100 : 0) + chord.pcs.length * 10 - extra;
+          var rootName = NOTE_NAMES_SHARP[rootPC];
+          var bass = lowestPC !== rootPC ? ' / ' + NOTE_NAMES_SHARP[lowestPC] : '';
+          var name = rootName + chord.name + bass;
+          if (!seenNames[name]) {
+            seenNames[name] = true;
+            candidates.push({ name: name, rootPC: rootPC, score: score });
+          }
+        }
+      }
+      // Omit5 match: 4+ note chords containing 5th (7) — also check without 5th
+      if (chord.pcs.length >= 4 && chord.pcs.indexOf(7) !== -1) {
+        var omit5pcs = [];
+        for (var k = 0; k < chord.pcs.length; k++) {
+          if (chord.pcs[k] !== 7) omit5pcs.push(chord.pcs[k]);
+        }
+        if (omit5pcs.length <= pcs.length + 1) {
+          var matched = 0;
+          for (var k = 0; k < omit5pcs.length; k++) {
+            if (intervals[omit5pcs[k]]) matched++;
+          }
+          if (matched === omit5pcs.length) {
+            var extra = pcs.length - omit5pcs.length;
+            var isRootPosition = rootPC === lowestPC;
+            var score = (isRootPosition ? 100 : 0) + chord.pcs.length * 10 - extra - 5;
+            var rootName = NOTE_NAMES_SHARP[rootPC];
+            var bass = lowestPC !== rootPC ? ' / ' + NOTE_NAMES_SHARP[lowestPC] : '';
+            var omitLabel = chord.pcs.length >= 5 ? '' : '(omit5)';
+            var name = rootName + chord.name + omitLabel + bass;
+            if (!seenNames[name]) {
+              seenNames[name] = true;
+              candidates.push({ name: name, rootPC: rootPC, score: score });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Bass + Triad detection
+  if (pcs.length >= 3) {
+    var upperPCs = [];
+    for (var i = 0; i < pcs.length; i++) {
+      if (pcs[i] !== lowestPC) upperPCs.push(pcs[i]);
+    }
+    if (upperPCs.length >= 3) {
+      for (var ti = 0; ti < upperPCs.length; ti++) {
+        var triadRoot = upperPCs[ti];
+        var triadIntervals = {};
+        for (var j = 0; j < upperPCs.length; j++) {
+          triadIntervals[((upperPCs[j] - triadRoot) + 12) % 12] = true;
+        }
+        for (var di = 0; di < TRIAD_DETECT_DB.length; di++) {
+          var triad = TRIAD_DETECT_DB[di];
+          var matched = 0;
+          for (var k = 0; k < triad.pcs.length; k++) {
+            if (triadIntervals[triad.pcs[k]]) matched++;
+          }
+          if (matched === triad.pcs.length) {
+            var triadName = NOTE_NAMES_SHARP[triadRoot] + (triad.name === 'Maj' ? '' : triad.name);
+            var bassName = NOTE_NAMES_SHARP[lowestPC];
+            var name = triadName + ' / ' + bassName;
+            if (!seenNames[name]) {
+              seenNames[name] = true;
+              var isTriadRoot = triadRoot === lowestPC;
+              var score = (isTriadRoot ? 100 : 0) + 25;
+              candidates.push({ name: name, rootPC: triadRoot, score: score });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Bass + Tetrad detection
+  if (pcs.length >= 4) {
+    var upperPCs = [];
+    for (var i = 0; i < pcs.length; i++) {
+      if (pcs[i] !== lowestPC) upperPCs.push(pcs[i]);
+    }
+    if (upperPCs.length >= 4) {
+      for (var ti = 0; ti < upperPCs.length; ti++) {
+        var tetRoot = upperPCs[ti];
+        var tetIntervals = {};
+        for (var j = 0; j < upperPCs.length; j++) {
+          tetIntervals[((upperPCs[j] - tetRoot) + 12) % 12] = true;
+        }
+        for (var di = 0; di < TETRAD_DETECT_DB.length; di++) {
+          var tet = TETRAD_DETECT_DB[di];
+          var matched = 0;
+          for (var k = 0; k < tet.pcs.length; k++) {
+            if (tetIntervals[tet.pcs[k]]) matched++;
+          }
+          if (matched === tet.pcs.length) {
+            var tetName = NOTE_NAMES_SHARP[tetRoot] + tet.name;
+            var bassName = NOTE_NAMES_SHARP[lowestPC];
+            if (tetRoot === lowestPC) continue;
+            var name = tetName + ' / ' + bassName;
+            if (!seenNames[name]) {
+              seenNames[name] = true;
+              var score = 30 + tet.pcs.length * 5;
+              candidates.push({ name: name, rootPC: tetRoot, score: score });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 6th + 7th → 13th tension rename
+  for (var i = 0; i < candidates.length; i++) {
+    var c = candidates[i];
+    var rootIntervals = {};
+    for (var j = 0; j < pcs.length; j++) {
+      rootIntervals[((pcs[j] - c.rootPC) + 12) % 12] = true;
+    }
+    var has7th = rootIntervals[10] || rootIntervals[11];
+    if (has7th) {
+      var is7 = rootIntervals[10];
+      var sfx = is7 ? '7' : '△7';
+      c.name = c.name.replace(/^([A-G]#?)6\/9(\(omit5\))?/, '$1' + sfx + '(9,13)');
+      c.name = c.name.replace(/^([A-G]#?)m6\/9(\(omit5\))?/, '$1m' + sfx + '(9,13)');
+      c.name = c.name.replace(/^([A-G]#?)6(\(omit5\))?/, '$1' + sfx + '(13)');
+      c.name = c.name.replace(/^([A-G]#?)m6(\(omit5\))?/, '$1m' + sfx + '(13)');
+    }
+  }
+
+  candidates.sort(function(a, b) { return b.score - a.score; });
+  return candidates.slice(0, 8);
+}
+
 // Conditional exports for Node.js (Vitest) — ignored in browser
 if (typeof module !== 'undefined') module.exports = {
   padParseRoot, padParseChordName,
@@ -1028,6 +1198,6 @@ if (typeof module !== 'undefined') module.exports = {
   padGetShellIntervals, padCalcAllVoicingPositions,
   padChordContextKey, padGetBuilderChordName,
   padGetDiatonicTetrads, padFindParentScales,
-  padEnumGuitarChordForms,
+  padEnumGuitarChordForms, padDetectChord,
   DIATONIC_CHORD_DB,
 };

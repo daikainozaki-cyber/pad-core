@@ -348,6 +348,107 @@ const GRID_32 = {
 
 const SCALE_DEGREE_NAMES = ['R','b2','2','b3','3','4','b5','5','b6','6','b7','7'];
 
+// ======== CHORD DETECTION DATABASE ========
+// Built from BUILDER_QUALITIES + tension extensions for chord detection
+
+function padBuildChordDetectDB() {
+  var db = [];
+  BUILDER_QUALITIES.flat().forEach(function(q) {
+    if (!q) return;
+    db.push({ name: q.name || 'Maj', pcs: q.pcs, pcsSet: new Set(q.pcs) });
+  });
+  var tensionChords = [
+    // 9th chords
+    { name: '7(9)', pcs: [0,4,7,10,2] },
+    { name: 'm7(9)', pcs: [0,3,7,10,2] },
+    { name: '△7(9)', pcs: [0,4,7,11,2] },
+    { name: '6/9', pcs: [0,4,7,9,2] },
+    { name: 'm6/9', pcs: [0,3,7,9,2] },
+    { name: '7(b9)', pcs: [0,4,7,10,1] },
+    { name: '7(#9)', pcs: [0,4,7,10,3] },
+    { name: 'm7(b9)', pcs: [0,3,7,10,1] },
+    // 11th chords
+    { name: '7(9,11)', pcs: [0,4,7,10,2,5] },
+    { name: 'm7(9,11)', pcs: [0,3,7,10,2,5] },
+    { name: '△7(9,#11)', pcs: [0,4,7,11,2,6] },
+    { name: '7(#11)', pcs: [0,4,7,10,6] },
+    // 13th chords
+    { name: '7(9,13)', pcs: [0,4,7,10,2,9] },
+    { name: 'm7(9,13)', pcs: [0,3,7,10,2,9] },
+    { name: '△7(9,13)', pcs: [0,4,7,11,2,9] },
+    { name: '7(b13)', pcs: [0,4,7,10,8] },
+    // Combined tensions
+    { name: '7(9,#11)', pcs: [0,4,7,10,2,6] },
+    { name: '7(9,b13)', pcs: [0,4,7,10,2,8] },
+    { name: '7(b9,#11)', pcs: [0,4,7,10,1,6] },
+    { name: '7(b9,b13)', pcs: [0,4,7,10,1,8] },
+    { name: '7(#9,b13)', pcs: [0,4,7,10,3,8] },
+    { name: '7(b9,13)', pcs: [0,4,7,10,1,9] },
+    { name: '7(#9,13)', pcs: [0,4,7,10,3,9] },
+    { name: '7(#11,13)', pcs: [0,4,7,10,6,9] },
+    { name: '7(9,#11,13)', pcs: [0,4,7,10,2,6,9] },
+    { name: '7(b9,#11,13)', pcs: [0,4,7,10,1,6,9] },
+    // Compact combined tensions (no 5th)
+    { name: '7(9,#11)', pcs: [0,4,10,2,6] },
+    { name: '7(9,b13)', pcs: [0,4,10,2,8] },
+    { name: '7(9,13)', pcs: [0,4,10,2,9] },
+    { name: '7(b9,#11)', pcs: [0,4,10,1,6] },
+    { name: '7(b9,b13)', pcs: [0,4,10,1,8] },
+    { name: '7(b9,13)', pcs: [0,4,10,1,9] },
+    { name: '7(#9,b13)', pcs: [0,4,10,3,8] },
+    { name: '7(#9,13)', pcs: [0,4,10,3,9] },
+    { name: '7(#11,13)', pcs: [0,4,10,6,9] },
+    // Compact tension voicings (no 5th)
+    { name: '7(13)', pcs: [0,4,10,9] },
+    { name: 'm7(13)', pcs: [0,3,10,9] },
+    { name: '△7(13)', pcs: [0,4,11,9] },
+    { name: '7(11)', pcs: [0,4,10,5] },
+    { name: 'm7(11)', pcs: [0,3,10,5] },
+    { name: '7(9)', pcs: [0,4,10,2] },
+    { name: 'm7(9)', pcs: [0,3,10,2] },
+    { name: '△7(9)', pcs: [0,4,11,2] },
+    // sus chords
+    { name: 'sus4', pcs: [0,5,7] },
+    { name: 'sus2', pcs: [0,2,7] },
+    { name: '7sus4', pcs: [0,5,7,10] },
+    { name: '7sus4(9)', pcs: [0,5,7,10,2] },
+    { name: '7sus4(9)', pcs: [0,5,10,2] },
+    { name: '7sus4(9,13)', pcs: [0,5,7,10,2,9] },
+    { name: '7sus4(9,13)', pcs: [0,5,10,2,9] },
+    { name: '7sus4(b9)', pcs: [0,5,7,10,1] },
+    { name: '7sus4(b9)', pcs: [0,5,10,1] },
+    // add chords
+    { name: 'add9', pcs: [0,4,7,2] },
+    { name: 'madd9', pcs: [0,3,7,2] },
+  ];
+  tensionChords.forEach(function(c) {
+    db.push({ name: c.name, pcs: c.pcs, pcsSet: new Set(c.pcs) });
+  });
+  return db;
+}
+var CHORD_DETECT_DB = padBuildChordDetectDB();
+
+var TRIAD_DETECT_DB = [
+  { name: 'Maj', pcs: [0,4,7] },
+  { name: 'm', pcs: [0,3,7] },
+  { name: 'dim', pcs: [0,3,6] },
+  { name: 'aug', pcs: [0,4,8] },
+  { name: 'sus4', pcs: [0,5,7] },
+  { name: 'sus2', pcs: [0,2,7] },
+];
+
+var TETRAD_DETECT_DB = [
+  { name: '△7', pcs: [0,4,7,11] },
+  { name: '7', pcs: [0,4,7,10] },
+  { name: 'm7', pcs: [0,3,7,10] },
+  { name: 'm△7', pcs: [0,3,7,11] },
+  { name: 'm7(b5)', pcs: [0,3,6,10] },
+  { name: 'dim7', pcs: [0,3,6,9] },
+  { name: '6', pcs: [0,4,7,9] },
+  { name: 'm6', pcs: [0,3,7,9] },
+  { name: '7sus4', pcs: [0,5,7,10] },
+];
+
 // Conditional exports for Node.js (Vitest) — ignored in browser
 if (typeof module !== 'undefined') module.exports = {
   NOTE_NAMES_SHARP, NOTE_NAMES_FLAT, FLAT_MAJOR_KEYS,
@@ -356,4 +457,5 @@ if (typeof module !== 'undefined') module.exports = {
   PC_TO_TENSION_NAME, TENSION_NAME_TO_PC, SCALE_AVAIL_TENSIONS,
   PAD_ROOT_TO_PC, PAD_QUALITY_INTERVALS, PAD_QUALITY_KEYS, PAD_QUALITY_DISPLAY,
   GRID, GRID_32, SCALE_DEGREE_NAMES,
+  padBuildChordDetectDB, CHORD_DETECT_DB, TRIAD_DETECT_DB, TETRAD_DETECT_DB,
 };

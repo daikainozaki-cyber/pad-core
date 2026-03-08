@@ -819,3 +819,95 @@ describe('padEnumGuitarChordForms', () => {
     expect(without5th.length).toBeGreaterThan(0);
   });
 });
+
+// ======== padDetectChord ========
+describe('padDetectChord', () => {
+  function hasMatch(results, pattern) {
+    return results.some(r => r.name === pattern || r.name.startsWith(pattern));
+  }
+
+  describe('triads', () => {
+    it('C major [60,64,67]', () => {
+      expect(padDetectChord([60, 64, 67])[0].name).toBe('CMaj');
+    });
+    it('C minor [60,63,67]', () => {
+      expect(padDetectChord([60, 63, 67])[0].name).toBe('Cm');
+    });
+    it('C dim [60,63,66]', () => {
+      expect(padDetectChord([60, 63, 66])[0].name).toBe('Cdim');
+    });
+    it('C aug [60,64,68]', () => {
+      expect(padDetectChord([60, 64, 68])[0].name).toBe('Caug');
+    });
+    it('C sus4 [60,65,67]', () => {
+      expect(hasMatch(padDetectChord([60, 65, 67]), 'Csus4')).toBe(true);
+    });
+  });
+
+  describe('tetrads', () => {
+    it('Cm7 [60,63,67,70]', () => {
+      expect(padDetectChord([60, 63, 67, 70])[0].name).toBe('Cm7');
+    });
+    it('C\u25B37 [60,64,67,71]', () => {
+      expect(padDetectChord([60, 64, 67, 71])[0].name).toBe('C\u25B37');
+    });
+    it('C7 [60,64,67,70]', () => {
+      expect(padDetectChord([60, 64, 67, 70])[0].name).toBe('C7');
+    });
+    it('Cdim7 [60,63,66,69]', () => {
+      expect(padDetectChord([60, 63, 66, 69])[0].name).toBe('Cdim7');
+    });
+    it('Cm7(b5) [60,63,66,70]', () => {
+      expect(padDetectChord([60, 63, 66, 70])[0].name).toBe('Cm7(b5)');
+    });
+  });
+
+  describe('tensions', () => {
+    it('C7(9) [60,64,67,70,74]', () => {
+      expect(hasMatch(padDetectChord([60, 64, 67, 70, 74]), 'C7(9)')).toBe(true);
+    });
+    it('C\u25B37(9) [60,64,67,71,74]', () => {
+      expect(hasMatch(padDetectChord([60, 64, 67, 71, 74]), 'C\u25B37(9)')).toBe(true);
+    });
+  });
+
+  describe('inversions', () => {
+    it('E,G,C [64,67,72] \u2192 CMaj / E', () => {
+      expect(hasMatch(padDetectChord([64, 67, 72]), 'CMaj / E')).toBe(true);
+    });
+    it('G,C,E [67,72,76] \u2192 CMaj / G', () => {
+      expect(hasMatch(padDetectChord([67, 72, 76]), 'CMaj / G')).toBe(true);
+    });
+  });
+
+  describe('edge cases', () => {
+    it('single note returns empty', () => {
+      expect(padDetectChord([60])).toEqual([]);
+    });
+    it('same note repeated returns empty', () => {
+      expect(padDetectChord([60, 72])).toEqual([]);
+    });
+    it('empty input returns empty', () => {
+      expect(padDetectChord([])).toEqual([]);
+    });
+    it('returns at most 8 results', () => {
+      expect(padDetectChord([60, 64, 67, 70, 74, 77]).length).toBeLessThanOrEqual(8);
+    });
+  });
+
+  describe('invariants', () => {
+    it('root position scores higher than inversions', () => {
+      var results = padDetectChord([60, 64, 67]);
+      if (results.length > 1) {
+        expect(results[0].score).toBeGreaterThanOrEqual(results[1].score);
+      }
+    });
+    it('all results have name, rootPC, score', () => {
+      padDetectChord([60, 64, 67, 70]).forEach(function(r) {
+        expect(r).toHaveProperty('name');
+        expect(r).toHaveProperty('rootPC');
+        expect(r).toHaveProperty('score');
+      });
+    });
+  });
+});
