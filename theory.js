@@ -694,6 +694,7 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
   var wAvgFret    = W.avgFret    !== undefined ? W.avgFret    : 15;
   var wSpan       = W.span       !== undefined ? W.span       : 10;
   var wGaps       = W.gaps       !== undefined ? W.gaps       : 15;
+  var wFullFret   = W.fullFret   !== undefined ? W.fullFret   : 15;
 
   // Fifth is optional when chord has tensions (9th+), since guitar has only 6 strings.
   // BUT: altered 5ths (b5=6, #5=8) that REPLACE the natural 5th define chord quality
@@ -941,8 +942,8 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
     // Pure open chord (avgFret≈1): full bonus. Higher frets: bonus shrinks
     // then flips to penalty. Standard barre always beats scattered open+fret.
     var openBonus = 0;
+    var openCount = 0;
     if (!noOpen) {
-      var openCount = 0;
       for (var i = 0; i < r.frets.length; i++) {
         if (r.frets[i] === 0) openCount++;
       }
@@ -953,12 +954,18 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       }
     }
 
+    // Full-fret bonus: all sounding strings are fretted (no open strings).
+    // Rewards standard barre shapes over open-string variants at same position.
+    var fullFretBonus = 0;
+    if (openCount === 0) fullFretBonus = wFullFret;
+
     return (r.rootInBass ? wRootBass : 0)
       + fifthBassBonus
       + rootStrBonus
       + top4Bonus
       + guideToneBonus
       + openBonus
+      + fullFretBonus
       + r.stringCount * wStringCount
       - avgFret * wAvgFret
       - r.span * wSpan
