@@ -911,3 +911,136 @@ describe('padDetectChord', () => {
     });
   });
 });
+
+// ======== padParseStockVoicings ========
+describe('padParseStockVoicings', () => {
+  const SAMPLE_JSON = {
+    _meta: { version: '1.0.0' },
+    major: {
+      Maj7: [
+        { id: 'maj7-1', name: 'Maj7(9)', label: 'Basic', LH: ['1','5'], RH: ['3','7','9'] },
+        { id: 'maj7-2', name: 'Maj7(#11)', label: '#11', LH: ['1','3'], RH: ['7','9','#11'] },
+      ]
+    },
+    minor: {
+      Min7: [
+        { id: 'min7-1', name: 'Min7(9)', label: 'Basic', LH: ['1','b7'], RH: ['b3','b7','9'] },
+      ]
+    },
+    diminished: {
+      Dim7: [
+        { id: 'dim-note', name: 'Dim7', label: 'No tensions', LH: [], RH: [] },
+      ]
+    }
+  };
+
+  it('parses into flat entry array', () => {
+    const entries = padParseStockVoicings(SAMPLE_JSON);
+    expect(entries.length).toBe(3); // dim-note skipped (empty LH+RH)
+  });
+
+  it('skips _meta key', () => {
+    const entries = padParseStockVoicings(SAMPLE_JSON);
+    expect(entries.some(e => e.category === '_meta')).toBe(false);
+  });
+
+  it('skips entries with empty LH and RH', () => {
+    const entries = padParseStockVoicings(SAMPLE_JSON);
+    expect(entries.some(e => e.id === 'dim-note')).toBe(false);
+  });
+
+  it('converts degree strings to semitones', () => {
+    const entries = padParseStockVoicings(SAMPLE_JSON);
+    const maj7 = entries.find(e => e.id === 'maj7-1');
+    expect(maj7.lhSemitones).toEqual([0, 7]);      // 1=0, 5=7
+    expect(maj7.rhSemitones).toEqual([4, 11, 2]);   // 3=4, 7=11, 9=2
+  });
+
+  it('computes unique allSemitones', () => {
+    const entries = padParseStockVoicings(SAMPLE_JSON);
+    const min7 = entries.find(e => e.id === 'min7-1');
+    // LH:[1,b7]=[0,10], RH:[b3,b7,9]=[3,10,2] → unique: [0,10,3,2]
+    expect(min7.allSemitones).toEqual([0, 10, 3, 2]);
+    expect(min7.pcCount).toBe(4); // b7 appears in both LH and RH
+  });
+
+  it('preserves category and subtype', () => {
+    const entries = padParseStockVoicings(SAMPLE_JSON);
+    const maj7 = entries.find(e => e.id === 'maj7-1');
+    expect(maj7.category).toBe('major');
+    expect(maj7.subtype).toBe('Maj7');
+  });
+});
+
+// ======== padMatchStockVoicing ========
+describe('padMatchStockVoicing', () => {
+  // Pre-parsed stock entries for testing
+  const STOCK = [
+    { id: 'maj7-1', name: 'Maj7(9)', label: 'Basic', category: 'major', subtype: 'Maj7',
+      lhSemitones: [0, 7], rhSemitones: [4, 11, 2], allSemitones: [0, 7, 4, 11, 2], pcCount: 5 },
+    { id: 'min7-1', name: 'Min7(9)', label: 'Basic', category: 'minor', subtype: 'Min7',
+      lhSemitones: [0, 10], rhSemitones: [3, 10, 2], allSemitones: [0, 10, 3, 2], pcCount: 4 },
+    { id: 'dom7-2', name: 'C7(9)', label: 'Natural 9', category: 'dominant', subtype: 'Dom7',
+      lhSemitones: [0, 10], rhSemitones: [4, 10, 2], allSemitones: [0, 10, 4, 2], pcCount: 4 },
+  ];
+
+  it('exact match returns score 1.0', () => {
+    // Cmaj7(9): C=60, G=67, E=64, B=71, D=74 → intervals [0,7,4,11,2]
+    const results = padMatchStockVoicing(0, [60, 67, 64, 71, 74], STOCK);
+    expect(results[0].id).toBe('maj7-1');
+    expect(results[0].score).toBe(1.0);
+  });
+
+  it('partial match scores below 1.0', () => {
+    // Cmaj7 without 9: C=60, G=67, E=64, B=71 → intervals [0,7,4,11], missing 2
+    const results = padMatchStockVoicing(0, [60, 67, 64, 71], STOCK);
+    const maj7 = results.find(r => r.id === 'maj7-1');
+    expect(maj7).toBeDefined();
+    expect(maj7.score).toBeLessThan(1.0);
+    expect(maj7.score).toBeGreaterThanOrEqual(0.5);
+  });
+
+  it('transposes correctly (D root = PC 2)', () => {
+    // Dmaj7(9): D=62, A=69, F#=66, C#=73, E=76 → intervals from D: [0,7,4,11,2]
+    const results = padMatchStockVoicing(2, [62, 69, 66, 73, 76], STOCK);
+    expect(results[0].id).toBe('maj7-1');
+    expect(results[0].score).toBe(1.0);
+  });
+
+  it('returns empty for less than 2 notes', () => {
+    expect(padMatchStockVoicing(0, [60], STOCK)).toEqual([]);
+    expect(padMatchStockVoicing(0, [], STOCK)).toEqual([]);
+  });
+
+  it('returns at most 8 results', () => {
+    const results = padMatchStockVoicing(0, [60, 64, 67, 70, 74], STOCK);
+    expect(results.length).toBeLessThanOrEqual(8);
+  });
+
+  it('all results have required fields', () => {
+    const results = padMatchStockVoicing(0, [60, 67, 64, 71, 74], STOCK);
+    for (const r of results) {
+      expect(r).toHaveProperty('id');
+      expect(r).toHaveProperty('name');
+      expect(r).toHaveProperty('score');
+      expect(r).toHaveProperty('category');
+      expect(r).toHaveProperty('matched');
+      expect(r).toHaveProperty('total');
+    }
+  });
+
+  it('Cm7(9) matches min7-1 exactly', () => {
+    // Cm7(9): C=60, Bb=70, Eb=63, D=74 → intervals [0,10,3,2]
+    const results = padMatchStockVoicing(0, [60, 70, 63, 74], STOCK);
+    expect(results[0].id).toBe('min7-1');
+    expect(results[0].score).toBe(1.0);
+  });
+
+  it('filters out low-score matches (< 0.5)', () => {
+    // C and G only → intervals [0,7], very partial match
+    const results = padMatchStockVoicing(0, [60, 67], STOCK);
+    for (const r of results) {
+      expect(r.score).toBeGreaterThanOrEqual(0.5);
+    }
+  });
+});

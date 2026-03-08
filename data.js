@@ -175,6 +175,14 @@ const TENSION_ROWS = [
   ],
 ];
 
+// ======== DEGREE NAME ↔ SEMITONE ========
+// Complete mapping: chord tones + tensions + enharmonic aliases (superset of TENSION_NAME_TO_PC)
+var DEGREE_TO_SEMITONE = {
+  '1':0, 'b9':1, '9':2, '#9':3, 'b3':3, '3':4, '11':5,
+  '#11':6, 'b5':6, '5':7, '#5':8, 'b13':8, '13':9, '6':9,
+  'b7':10, '7':11, 'bb7':9
+};
+
 // ======== AVAILABLE TENSIONS PER SCALE ========
 const PC_TO_TENSION_NAME = { 1:'b9', 2:'9', 3:'#9', 5:'11', 6:'#11', 8:'b13', 9:'13' };
 const TENSION_NAME_TO_PC = { 'b9':1, '9':2, '#9':3, '11':5, '#11':6, 'b13':8, '13':9 };
@@ -454,7 +462,7 @@ if (typeof module !== 'undefined') module.exports = {
   NOTE_NAMES_SHARP, NOTE_NAMES_FLAT, FLAT_MAJOR_KEYS,
   SCALES, KEY_SPELLINGS,
   BUILDER_QUALITIES, TENSION_ROWS,
-  PC_TO_TENSION_NAME, TENSION_NAME_TO_PC, SCALE_AVAIL_TENSIONS,
+  DEGREE_TO_SEMITONE, PC_TO_TENSION_NAME, TENSION_NAME_TO_PC, SCALE_AVAIL_TENSIONS,
   PAD_ROOT_TO_PC, PAD_QUALITY_INTERVALS, PAD_QUALITY_KEYS, PAD_QUALITY_DISPLAY,
   GRID, GRID_32, SCALE_DEGREE_NAMES,
   padBuildChordDetectDB, CHORD_DETECT_DB, TRIAD_DETECT_DB, TETRAD_DETECT_DB,

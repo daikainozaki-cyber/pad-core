@@ -1189,6 +1189,105 @@ function padDetectChord(midiNotes) {
   return candidates.slice(0, 8);
 }
 
+// ======== STOCK VOICING MATCHING ========
+// Parse stock-voicings.json into flat array of entries with semitone arrays.
+// Input: raw JSON object (parsed stock-voicings.json).
+// Output: array of { id, name, label, category, subtype, lhSemitones, rhSemitones, allSemitones, pcCount }
+
+function padParseStockVoicings(jsonData) {
+  var entries = [];
+  var categories = Object.keys(jsonData);
+  for (var ci = 0; ci < categories.length; ci++) {
+    var cat = categories[ci];
+    if (cat === '_meta') continue;
+    var subtypes = Object.keys(jsonData[cat]);
+    for (var si = 0; si < subtypes.length; si++) {
+      var sub = subtypes[si];
+      var voicings = jsonData[cat][sub];
+      for (var vi = 0; vi < voicings.length; vi++) {
+        var v = voicings[vi];
+        if ((!v.LH || v.LH.length === 0) && (!v.RH || v.RH.length === 0)) continue;
+        var lh = [], rh = [];
+        for (var i = 0; i < (v.LH || []).length; i++) {
+          var s = DEGREE_TO_SEMITONE[v.LH[i]];
+          if (s !== undefined) lh.push(s);
+        }
+        for (var i = 0; i < (v.RH || []).length; i++) {
+          var s = DEGREE_TO_SEMITONE[v.RH[i]];
+          if (s !== undefined) rh.push(s);
+        }
+        var seen = {};
+        var all = [];
+        for (var i = 0; i < lh.length; i++) {
+          if (!seen[lh[i]]) { seen[lh[i]] = true; all.push(lh[i]); }
+        }
+        for (var i = 0; i < rh.length; i++) {
+          if (!seen[rh[i]]) { seen[rh[i]] = true; all.push(rh[i]); }
+        }
+        entries.push({
+          id: v.id, name: v.name, label: v.label,
+          category: cat, subtype: sub,
+          lhSemitones: lh, rhSemitones: rh,
+          allSemitones: all, pcCount: all.length,
+        });
+      }
+    }
+  }
+  return entries;
+}
+
+// Match MIDI notes against stock voicing patterns.
+// rootPC: 0-11 (pitch class of root). midiNotes: array of MIDI values.
+// stockEntries: output of padParseStockVoicings().
+// Returns array of { id, name, label, category, subtype, score, matched, total } sorted by score.
+
+function padMatchStockVoicing(rootPC, midiNotes, stockEntries) {
+  if (!midiNotes || midiNotes.length < 2 || !stockEntries) return [];
+
+  // Convert MIDI notes to interval set (semitones from root, mod 12)
+  var intervalSet = {};
+  var intervalCount = 0;
+  for (var i = 0; i < midiNotes.length; i++) {
+    var iv = ((midiNotes[i] % 12) - rootPC + 12) % 12;
+    if (!intervalSet[iv]) { intervalSet[iv] = true; intervalCount++; }
+  }
+
+  var results = [];
+  for (var i = 0; i < stockEntries.length; i++) {
+    var entry = stockEntries[i];
+    var all = entry.allSemitones;
+    if (all.length === 0) continue;
+
+    // Count how many of the stock voicing's degrees are in our input
+    var matched = 0;
+    for (var j = 0; j < all.length; j++) {
+      if (intervalSet[all[j]]) matched++;
+    }
+    if (matched === 0) continue;
+
+    // Jaccard similarity: intersection / union
+    var union = intervalCount + all.length - matched;
+    var score = matched / union;
+
+    // Exact match bonus
+    if (matched === all.length && all.length === intervalCount) score = 1.0;
+
+    if (score < 0.5) continue;
+
+    results.push({
+      id: entry.id, name: entry.name, label: entry.label,
+      category: entry.category, subtype: entry.subtype,
+      score: Math.round(score * 100) / 100,
+      matched: matched, total: all.length,
+    });
+  }
+
+  results.sort(function(a, b) {
+    return b.score - a.score || b.matched - a.matched;
+  });
+  return results.slice(0, 8);
+}
+
 // Conditional exports for Node.js (Vitest) — ignored in browser
 if (typeof module !== 'undefined') module.exports = {
   padParseRoot, padParseChordName,
@@ -1199,5 +1298,6 @@ if (typeof module !== 'undefined') module.exports = {
   padChordContextKey, padGetBuilderChordName,
   padGetDiatonicTetrads, padFindParentScales,
   padEnumGuitarChordForms, padDetectChord,
+  padParseStockVoicings, padMatchStockVoicing,
   DIATONIC_CHORD_DB,
 };
