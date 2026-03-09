@@ -10,6 +10,18 @@ if (typeof require !== 'undefined' && typeof PAD_QUALITY_KEYS === 'undefined') {
   Object.assign(globalThis, require('./theory.js'));
 }
 
+// ======== HELPERS ========
+
+// Count tensions in a quality string (parenthesized or inline)
+function _padTensionCount(q) {
+  var m = q.match(/\(([^)]+)\)/);
+  if (!m) {
+    var base = q.replace(/^(m7b5|m7|maj7|dim7|aug7|7|m6|6|dim|aug|m|M7|sus[24]?)/, '');
+    return base.length > 0 ? 1 : 0;
+  }
+  return m[1].split(',').length;
+}
+
 // ======== CANDIDATE GENERATION ========
 
 /**
@@ -63,8 +75,9 @@ function padGenerateCandidates(input, memorySlots) {
     return padGenerateSlashCandidates(rootStr, quality, bassInput);
   }
 
-  // QUALITY_KEYS prefix match
+  // QUALITY_KEYS prefix match (with interval dedup)
   var candidates = [];
+  var seenIntervals = {};
   var qualityKeys = PAD_QUALITY_KEYS;
   for (var k = 0; k < qualityKeys.length; k++) {
     var qKey = qualityKeys[k];
@@ -72,17 +85,23 @@ function padGenerateCandidates(input, memorySlots) {
       var fullName = rootStr + qKey;
       var parsed = padParseChordName(fullName);
       if (parsed) {
-        candidates.push({
-          type: 'chord',
-          name: parsed.displayName,
-          quality: qKey,
-          exactMatch: qKey === qualityInput || qKey.toLowerCase() === qualityInput.toLowerCase(),
-        });
+        // Dedup by intervals (same voicing = same chord)
+        var dedupKey = parsed.intervals.slice().sort(function(a,b){return a-b;}).join(',') +
+                       ':' + (parsed.bass === null ? '' : parsed.bass);
+        if (!seenIntervals[dedupKey]) {
+          seenIntervals[dedupKey] = true;
+          candidates.push({
+            type: 'chord',
+            name: parsed.displayName,
+            quality: qKey,
+            exactMatch: qKey === qualityInput || qKey.toLowerCase() === qualityInput.toLowerCase(),
+          });
+        }
       }
     }
   }
 
-  // Sort: exact match first, then case-aware boost, then shorter quality
+  // Sort: exact match → minor/major boost → fewer tensions → shorter quality
   var wantMinor = (rootWasLower && !qualityInput) ||
                   (qualityInput.length > 0 && qualityInput[0] === 'm');
   var wantMajor = qualityInput.length > 0 && qualityInput[0] === 'M';
@@ -98,10 +117,14 @@ function padGenerateCandidates(input, memorySlots) {
       var bJ = (b.quality[0] === 'M' || b.quality.indexOf('maj') === 0) ? 1 : 0;
       if (aJ !== bJ) return bJ - aJ;
     }
+    // Fewer tensions first (base → single → double → triple)
+    var tA = _padTensionCount(a.quality);
+    var tB = _padTensionCount(b.quality);
+    if (tA !== tB) return tA - tB;
     return a.quality.length - b.quality.length;
   });
 
-  return candidates.slice(0, 12);
+  return candidates.slice(0, 15);
 }
 
 /**
