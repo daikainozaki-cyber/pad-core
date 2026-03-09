@@ -1044,3 +1044,75 @@ describe('padMatchStockVoicing', () => {
     }
   });
 });
+
+// ======== padClassifyPC ========
+describe('padClassifyPC', () => {
+  const active = new Set([0, 4, 7, 10]); // C E G Bb (C7)
+  const g3 = new Set([4]);  // 3rd
+  const g7 = new Set([10]); // b7
+
+  it('classifies root', () => {
+    expect(padClassifyPC(0, 0, null, active, g3, g7)).toBe('root');
+  });
+
+  it('classifies bass (different from root)', () => {
+    expect(padClassifyPC(4, 0, 4, active, g3, g7)).toBe('bass');
+  });
+
+  it('classifies guide3', () => {
+    expect(padClassifyPC(4, 0, null, active, g3, g7)).toBe('guide3');
+  });
+
+  it('classifies guide7', () => {
+    expect(padClassifyPC(10, 0, null, active, g3, g7)).toBe('guide7');
+  });
+
+  it('classifies tension (active but not root/guide)', () => {
+    expect(padClassifyPC(7, 0, null, active, g3, g7)).toBe('tension');
+  });
+
+  it('classifies inactive', () => {
+    expect(padClassifyPC(1, 0, null, active, g3, g7)).toBe('inactive');
+  });
+
+  it('root takes priority over bass when same PC', () => {
+    expect(padClassifyPC(0, 0, 0, active, g3, g7)).toBe('root');
+  });
+
+  it('handles null/undefined bassPC', () => {
+    expect(padClassifyPC(4, 0, undefined, active, g3, g7)).toBe('guide3');
+  });
+
+  it('handles empty activePCS', () => {
+    expect(padClassifyPC(0, 0, null, new Set(), g3, g7)).toBe('inactive');
+  });
+
+  it('handles null activePCS', () => {
+    expect(padClassifyPC(0, 0, null, null, g3, g7)).toBe('inactive');
+  });
+});
+
+// ======== padClassifyColor ========
+describe('padClassifyColor', () => {
+  it('returns root color for root classification', () => {
+    expect(padClassifyColor('root')).toBe('#E69F00');
+  });
+
+  it('returns guide3 color', () => {
+    expect(padClassifyColor('guide3')).toBe('#009E73');
+  });
+
+  it('returns inactive for unknown classification', () => {
+    expect(padClassifyColor('inactive')).toBe('#2a2a3e');
+  });
+
+  it('uses custom theme', () => {
+    const custom = { root: '#ff0000', inactive: '#000' };
+    expect(padClassifyColor('root', custom)).toBe('#ff0000');
+  });
+
+  it('falls back to inactive for missing key in custom theme', () => {
+    const custom = { inactive: '#000' };
+    expect(padClassifyColor('guide3', custom)).toBe('#000');
+  });
+});

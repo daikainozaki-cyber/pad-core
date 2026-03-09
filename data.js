@@ -457,6 +457,19 @@ var TETRAD_DETECT_DB = [
   { name: '7sus4', pcs: [0,5,7,10] },
 ];
 
+// ======== COLOR THEME (Okabe-Ito colorblind-safe) ========
+
+var PAD_THEME_OKABE_ITO = {
+  root:     '#E69F00',
+  bass:     '#ff9800',
+  guide3:   '#009E73',
+  guide7:   '#CC79A7',
+  tension:  '#56B4E9',
+  chord:    '#56B4E9',
+  inactive: '#2a2a3e',
+  mute:     '#D55E00',
+};
+
 // Conditional exports for Node.js (Vitest) — ignored in browser
 if (typeof module !== 'undefined') module.exports = {
   NOTE_NAMES_SHARP, NOTE_NAMES_FLAT, FLAT_MAJOR_KEYS,
@@ -466,4 +479,5 @@ if (typeof module !== 'undefined') module.exports = {
   PAD_ROOT_TO_PC, PAD_QUALITY_INTERVALS, PAD_QUALITY_KEYS, PAD_QUALITY_DISPLAY,
   GRID, GRID_32, SCALE_DEGREE_NAMES,
   padBuildChordDetectDB, CHORD_DETECT_DB, TRIAD_DETECT_DB, TETRAD_DETECT_DB,
+  PAD_THEME_OKABE_ITO,
 };
