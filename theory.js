@@ -1288,6 +1288,29 @@ function padMatchStockVoicing(rootPC, midiNotes, stockEntries) {
   return results.slice(0, 8);
 }
 
+// ======== PITCH CLASS CLASSIFICATION ========
+
+/**
+ * Classify a pitch class by its role in the current chord context.
+ * Returns: 'root' | 'bass' | 'guide3' | 'guide7' | 'tension' | 'inactive'
+ * Pure function — no global state reads.
+ */
+function padClassifyPC(pc, rootPC, bassPC, activePCS, guide3Set, guide7Set) {
+  if (!activePCS || !activePCS.has(pc)) return 'inactive';
+  if (pc === rootPC) return 'root';
+  if (bassPC !== null && bassPC !== undefined && pc === bassPC && pc !== rootPC) return 'bass';
+  if (guide3Set && guide3Set.has(pc)) return 'guide3';
+  if (guide7Set && guide7Set.has(pc)) return 'guide7';
+  return 'tension';
+}
+
+/**
+ * Get the color for a pitch class classification from a theme object.
+ */
+function padClassifyColor(classification, theme) {
+  return (theme || PAD_THEME_OKABE_ITO)[classification] || (theme || PAD_THEME_OKABE_ITO).inactive;
+}
+
 // Conditional exports for Node.js (Vitest) — ignored in browser
 if (typeof module !== 'undefined') module.exports = {
   padParseRoot, padParseChordName,
@@ -1299,5 +1322,6 @@ if (typeof module !== 'undefined') module.exports = {
   padGetDiatonicTetrads, padFindParentScales,
   padEnumGuitarChordForms, padDetectChord,
   padParseStockVoicings, padMatchStockVoicing,
+  padClassifyPC, padClassifyColor,
   DIATONIC_CHORD_DB,
 };
