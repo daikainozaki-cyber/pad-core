@@ -34,3 +34,6 @@ Object.assign(globalThis, render);
 
 const circle = require('../../circle.js');
 Object.assign(globalThis, circle);
+
+const builderUI = require('../../builder-ui.js');
+Object.assign(globalThis, builderUI);
