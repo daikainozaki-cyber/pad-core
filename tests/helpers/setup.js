@@ -37,3 +37,6 @@ Object.assign(globalThis, circle);
 
 const builderUI = require('../../builder-ui.js');
 Object.assign(globalThis, builderUI);
+
+const incremental = require('../../incremental.js');
+Object.assign(globalThis, incremental);
