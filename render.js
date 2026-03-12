@@ -919,9 +919,238 @@ function padRenderPiano(svg, opts) {
   }
 }
 
+// ======== STAFF NOTATION HELPERS ========
+
+var PAD_DIATONIC_SEMITONES = [0, 2, 4, 5, 7, 9, 11]; // C D E F G A B
+var PAD_LETTER_NAMES = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+var PAD_PC_TO_DIA_SHARP = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
+var PAD_PC_TO_DIA_FLAT  = [0, 1, 1, 2, 2, 3, 4, 4, 5, 5, 6, 6];
+
+function padMidiToStaffPos(midi, flats) {
+  var octave = Math.floor(midi / 12) - 1;
+  var pc = midi % 12;
+  if (flats) {
+    var p =      [0, 1, 1, 2, 2, 3, 4, 4, 5, 5, 6, 6];
+    var isFlat = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0][pc];
+    return { pos: (octave - 4) * 7 + p[pc], accidental: isFlat ? 'flat' : null };
+  }
+  var pcToPos = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
+  var isSharp = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0][pc];
+  return { pos: (octave - 4) * 7 + pcToPos[pc], accidental: isSharp ? 'sharp' : null };
+}
+
+function padDegreeToDiatonicOffset(degName) {
+  if (degName === 'R') return 0;
+  if (degName === 'b9' || degName === '9' || degName === '2' || degName === '#9') return 1;
+  if (degName === 'm3' || degName === '3') return 2;
+  if (degName === '4' || degName === '11' || degName === '#11') return 3;
+  if (degName === 'b5' || degName === '5' || degName === '#5') return 4;
+  if (degName === 'b13' || degName === '6' || degName === '13') return 5;
+  if (degName === 'b7' || degName === '\u25B37') return 6;
+  return null;
+}
+
+function padDegreeAwareStaffPos(midi, rootPC, degName, defaultFlats) {
+  var diaOffset = padDegreeToDiatonicOffset(degName);
+  if (diaOffset === null) return padMidiToStaffPos(midi, defaultFlats);
+  var rootDia = defaultFlats ? PAD_PC_TO_DIA_FLAT[rootPC] : PAD_PC_TO_DIA_SHARP[rootPC];
+  var targetDia = (rootDia + diaOffset) % 7;
+  var targetSemitone = PAD_DIATONIC_SEMITONES[targetDia];
+  var midiOctave = Math.floor(midi / 12) - 1;
+  var bestOctave = midiOctave, minDiff = Infinity;
+  for (var o = midiOctave - 1; o <= midiOctave + 1; o++) {
+    var diff = Math.abs(midi - ((o + 1) * 12 + targetSemitone));
+    if (diff < minDiff) { minDiff = diff; bestOctave = o; }
+  }
+  var pos = (bestOctave - 4) * 7 + targetDia;
+  var accVal = midi - ((bestOctave + 1) * 12 + targetSemitone);
+  if (accVal > 1 || accVal < -1) return padMidiToStaffPos(midi, defaultFlats);
+  var accStr = accVal === 1 ? 'sharp' : accVal === -1 ? 'flat' : null;
+  var noteName = PAD_LETTER_NAMES[targetDia] + (accVal === 1 ? '#' : accVal === -1 ? 'b' : '');
+  return { pos: pos, accidental: accStr, noteName: noteName };
+}
+
+// ======== STAFF NOTATION RENDERER ========
+
+function padRenderStaff(svg, opts) {
+  var o = opts || {};
+  var midiNotes = o.midiNotes || [];
+  var rootPC = o.rootPC != null ? o.rootPC : -1;
+  var defaultFlats = o.defaultFlats || false;
+  var W = o.width || 564;
+  var mobile = o.isMobile || false;
+  var landscape = o.isLandscape || false;
+  var C = o.colors || PAD_INST_COLORS;
+  // noteInfoFn(midi, pc, interval) → { degName, staffRootPC?, useFlats?, noteName? }
+  var noteInfoFn = o.noteInfoFn || null;
+
+  var NS = 'http://www.w3.org/2000/svg';
+  var staffLineGap = 8;
+  var trebleTop = 20;
+  var bassTop = trebleTop + 4 * staffLineGap + 30;
+  var totalH = bassTop + 4 * staffLineGap + 30;
+
+  svg.style.display = '';
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + totalH);
+  if (mobile || landscape) {
+    svg.removeAttribute('width'); svg.removeAttribute('height');
+    svg.style.width = '100%'; svg.style.height = 'auto';
+  } else {
+    svg.setAttribute('width', W);
+    svg.setAttribute('height', totalH);
+    svg.style.width = ''; svg.style.height = '';
+  }
+  svg.innerHTML = '';
+
+  // Draw staff lines
+  var staffLeft = 40, staffRight = W - 20;
+  for (var i = 0; i < 5; i++) {
+    var ty = trebleTop + i * staffLineGap;
+    var tl = document.createElementNS(NS, 'line');
+    tl.setAttribute('x1', staffLeft); tl.setAttribute('y1', ty);
+    tl.setAttribute('x2', staffRight); tl.setAttribute('y2', ty);
+    tl.setAttribute('stroke', '#666'); tl.setAttribute('stroke-width', 1);
+    svg.appendChild(tl);
+    var by = bassTop + i * staffLineGap;
+    var bl = document.createElementNS(NS, 'line');
+    bl.setAttribute('x1', staffLeft); bl.setAttribute('y1', by);
+    bl.setAttribute('x2', staffRight); bl.setAttribute('y2', by);
+    bl.setAttribute('stroke', '#666'); bl.setAttribute('stroke-width', 1);
+    svg.appendChild(bl);
+  }
+
+  // Clef labels
+  var trebleClef = document.createElementNS(NS, 'text');
+  trebleClef.setAttribute('x', 14); trebleClef.setAttribute('y', trebleTop + 28);
+  trebleClef.setAttribute('font-size', '36px'); trebleClef.setAttribute('fill', '#999');
+  trebleClef.textContent = '\uD834\uDD1E';
+  svg.appendChild(trebleClef);
+  var bassClefEl = document.createElementNS(NS, 'text');
+  bassClefEl.setAttribute('x', 14); bassClefEl.setAttribute('y', bassTop + 16);
+  bassClefEl.setAttribute('font-size', '24px'); bassClefEl.setAttribute('fill', '#999');
+  bassClefEl.textContent = '\uD834\uDD22';
+  svg.appendChild(bassClefEl);
+
+  // Staff pos 0 = C4 (middle C). Y coords:
+  var middleCY = trebleTop + 5 * staffLineGap;
+  function posToY(pos) {
+    return middleCY - pos * (staffLineGap / 2);
+  }
+
+  // Draw notes
+  var noteX = staffLeft + 80;
+  var noteSpacing = 50;
+
+  for (var idx = 0; idx < midiNotes.length; idx++) {
+    var midi = midiNotes[idx];
+    var pc = midi % 12;
+    var interval = ((pc - rootPC) % 12 + 12) % 12;
+
+    var useFlats = defaultFlats;
+    var degName = SCALE_DEGREE_NAMES[interval];
+    var staffResult;
+    var degreeNoteName = null;
+
+    if (noteInfoFn) {
+      var info = noteInfoFn(midi, pc, interval);
+      degName = info.degName || degName;
+      if (info.staffRootPC != null) {
+        staffResult = padDegreeAwareStaffPos(midi, info.staffRootPC, degName, defaultFlats);
+        degreeNoteName = staffResult.noteName || null;
+      } else {
+        if (info.useFlats != null) useFlats = info.useFlats;
+        staffResult = padMidiToStaffPos(midi, useFlats);
+      }
+      if (info.noteName) degreeNoteName = info.noteName;
+    } else {
+      staffResult = padMidiToStaffPos(midi, useFlats);
+    }
+
+    var pos = staffResult.pos;
+    var accidental = staffResult.accidental;
+    var ny = posToY(pos);
+    var nx = noteX + idx * noteSpacing;
+
+    // Ledger lines — between staves (middle C area)
+    if (pos <= 0) {
+      for (var lp = 0; lp >= pos; lp -= 2) {
+        var ly = posToY(lp);
+        if (ly > trebleTop + 4 * staffLineGap && ly < bassTop) {
+          var ll = document.createElementNS(NS, 'line');
+          ll.setAttribute('x1', nx - 10); ll.setAttribute('y1', ly);
+          ll.setAttribute('x2', nx + 10); ll.setAttribute('y2', ly);
+          ll.setAttribute('stroke', '#666'); ll.setAttribute('stroke-width', 1);
+          svg.appendChild(ll);
+        }
+      }
+    }
+    // Above treble
+    if (pos >= 12) {
+      for (var lp2 = 12; lp2 <= pos; lp2 += 2) {
+        var ly2 = posToY(lp2);
+        if (ly2 < trebleTop) {
+          var ll2 = document.createElementNS(NS, 'line');
+          ll2.setAttribute('x1', nx - 10); ll2.setAttribute('y1', ly2);
+          ll2.setAttribute('x2', nx + 10); ll2.setAttribute('y2', ly2);
+          ll2.setAttribute('stroke', '#666'); ll2.setAttribute('stroke-width', 1);
+          svg.appendChild(ll2);
+        }
+      }
+    }
+    // Below bass staff
+    if (pos <= -7) {
+      for (var lp3 = -7; lp3 >= pos; lp3 -= 2) {
+        var ly3 = posToY(lp3);
+        if (ly3 > bassTop + 4 * staffLineGap) {
+          var ll3 = document.createElementNS(NS, 'line');
+          ll3.setAttribute('x1', nx - 10); ll3.setAttribute('y1', ly3);
+          ll3.setAttribute('x2', nx + 10); ll3.setAttribute('y2', ly3);
+          ll3.setAttribute('stroke', '#666'); ll3.setAttribute('stroke-width', 1);
+          svg.appendChild(ll3);
+        }
+      }
+    }
+
+    // Note head
+    var noteEl = document.createElementNS(NS, 'ellipse');
+    noteEl.setAttribute('cx', nx); noteEl.setAttribute('cy', ny);
+    noteEl.setAttribute('rx', 5); noteEl.setAttribute('ry', 3.5);
+    noteEl.setAttribute('fill', '#fff');
+    noteEl.setAttribute('transform', 'rotate(-15 ' + nx + ' ' + ny + ')');
+    svg.appendChild(noteEl);
+
+    // Accidental
+    if (accidental) {
+      var sh = document.createElementNS(NS, 'text');
+      sh.setAttribute('x', nx - 12); sh.setAttribute('y', ny + 4);
+      sh.setAttribute('font-size', '12px'); sh.setAttribute('fill', '#ff9800');
+      sh.textContent = accidental === 'sharp' ? '\u266F' : '\u266D';
+      svg.appendChild(sh);
+    }
+
+    // Degree label above note
+    var degEl = document.createElementNS(NS, 'text');
+    degEl.setAttribute('x', nx); degEl.setAttribute('y', ny - 10);
+    degEl.setAttribute('text-anchor', 'middle');
+    degEl.setAttribute('font-size', '9px'); degEl.setAttribute('font-weight', '600');
+    degEl.setAttribute('fill', interval === 0 ? (C.root || '#E69F00') : '#aaa');
+    degEl.textContent = degName;
+    svg.appendChild(degEl);
+
+    // Note name label below
+    var nameEl = document.createElementNS(NS, 'text');
+    nameEl.setAttribute('x', nx); nameEl.setAttribute('y', totalH - 4);
+    nameEl.setAttribute('text-anchor', 'middle');
+    nameEl.setAttribute('font-size', '9px'); nameEl.setAttribute('fill', '#999');
+    nameEl.textContent = degreeNoteName || (useFlats ? NOTE_NAMES_FLAT[pc] : NOTE_NAMES_SHARP[pc]);
+    svg.appendChild(nameEl);
+  }
+}
+
 // Conditional exports for Node.js (Vitest) — ignored in browser
 if (typeof module !== 'undefined') module.exports = {
   padBaseMidi, padMidiNote, padNoteName,
   padDegreeName, padGridViewBox, padComputeBoxes,
   padRenderGrid, padDrawBoxes, padRenderFretboard, padRenderPiano,
+  padMidiToStaffPos, padDegreeAwareStaffPos, padRenderStaff,
 };
