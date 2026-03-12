@@ -362,6 +362,12 @@ const PAD_INST_COLORS = {
   overlayText: '#aaa',
   padRange: '#56B4E9',      // pad range highlight
   mute: '#D55E00',          // mute X mark
+  // Piano-specific (white/black key color variants)
+  pianoChordWhite: '#90CAF9',     // active chord tone on white key
+  pianoChordBlack: '#4A90D9',     // active chord tone on black key
+  pianoOverlayWhite: '#b8d8ec',   // overlay on white key
+  pianoOverlayCharWhite: '#e8dfa0', // overlay char on white key
+  charNote: '#F0E442',            // characteristic note (scale mode)
 };
 
 // Standard guitar tuning (high to low): E4, B3, G3, D3, A2, E2

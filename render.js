@@ -657,9 +657,271 @@ function padRenderFretboard(svg, opts) {
   }
 }
 
+// ======== PIANO RENDERING ========
+
+/**
+ * Render a piano keyboard diagram into an SVG element.
+ * Pure function — all state passed via opts. No global reads.
+ *
+ * @param {SVGElement} svg - Target SVG element (will be cleared)
+ * @param {Object} opts
+ *   Required:
+ *     rootPC:       number    - root pitch class (0-11, or -1 for no root)
+ *   Optional:
+ *     pcsSet:       Set       - active pitch classes (default: empty)
+ *     bassPC:       number|null - bass note PC
+ *     renderState:  Object    - { guide3PCS, guide7PCS, tensionPCS, avoidPCS, charPCS }
+ *     overlayPCS:   Set|null  - overlay scale PCS
+ *     overlayCharPCS: Set|null - characteristic notes in overlay
+ *     chordMode:    boolean   - true = chord mode (guide tones), false = scale mode (char notes)
+ *     numOctaves:   number    - number of octaves to display (default: 4)
+ *     startMidi:    number    - MIDI note of leftmost C (default: 48 = C3)
+ *     selectedNotes: Set      - MIDI notes with selection markers
+ *     solo:         boolean   - solo display mode (larger keys)
+ *     width:        number    - diagram width (default: 564)
+ *     isMobile:     boolean
+ *     isLandscape:  boolean
+ *     colors:       Object    - color palette (default: PAD_INST_COLORS)
+ *     labelFn:      function(pc, midi) => string  - custom label function
+ *     keyColorFn:   function(pc, isWhite, midi) => {fill, textColor, opacity, showLabel} | null
+ *                   If provided, overrides default color logic entirely
+ *     onKeyClick:   function(midi)|null - click callback
+ */
+function padRenderPiano(svg, opts) {
+  var o = opts || {};
+  var rootPC = o.rootPC != null ? o.rootPC : -1;
+  var pcsSet = o.pcsSet || new Set();
+  var bassPC = o.bassPC != null ? o.bassPC : null;
+  var rs = o.renderState || {};
+  var ovlPCS = o.overlayPCS || null;
+  var ovlCharPCS = o.overlayCharPCS || null;
+  var chordMode = o.chordMode || false;
+  var numOctaves = o.numOctaves || 4;
+  var startMidi = o.startMidi != null ? o.startMidi : 48;
+  var selectedNotes = o.selectedNotes || new Set();
+  var solo = o.solo || false;
+  var W = o.width || 564;
+  var mobile = o.isMobile || false;
+  var landscape = o.isLandscape || false;
+  var C = o.colors || PAD_INST_COLORS;
+  var labelFn = o.labelFn || function(pc) { return SCALE_DEGREE_NAMES[((pc - rootPC) % 12 + 12) % 12]; };
+  var keyColorFn = o.keyColorFn || null;
+  var onClick = o.onKeyClick || null;
+
+  var guide3 = rs.guide3PCS || new Set();
+  var guide7 = rs.guide7PCS || new Set();
+  var tp = rs.tensionPCS || new Set();
+  var av = rs.avoidPCS || new Set();
+  var charPCS = rs.charPCS || new Set();
+
+  // No root when no active notes
+  if (pcsSet.size === 0) rootPC = -1;
+
+  var NS = 'http://www.w3.org/2000/svg';
+  svg.innerHTML = '';
+
+  // Dimensions
+  var whiteH = solo ? 80 : 50;
+  var blackH = solo ? 52 : 32;
+  var numWhites = numOctaves * 7;
+  var startX = 8, startY = 2;
+  var whiteW = (W - startX - 15) / numWhites;
+  var blackW = whiteW * 0.7;
+  var H = whiteH + (solo ? 22 : 16);
+  var startOctave = Math.floor(startMidi / 12) - 2;
+
+  // ViewBox
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  if (mobile || landscape) {
+    svg.removeAttribute('width'); svg.removeAttribute('height');
+    svg.style.width = '100%'; svg.style.height = 'auto';
+  } else {
+    svg.setAttribute('width', W); svg.setAttribute('height', H);
+    svg.style.width = ''; svg.style.height = '';
+  }
+
+  var whiteNotes = [0,2,4,5,7,9,11];
+  var blackNotes = [1,3,6,8,10];
+  var blackPositions = [0, 1, 3, 4, 5];
+
+  // Default color logic (used when keyColorFn is not provided)
+  function defaultKeyColor(pc, isWhite, midi) {
+    var isActive = pcsSet.has(pc);
+    var isRoot = rootPC >= 0 && pc === rootPC;
+    var isBass = bassPC !== null && pc === bassPC && !isRoot;
+    var isChar = !chordMode && charPCS.has(pc) && !isRoot;
+    var isGuide3 = chordMode && guide3.has(pc) && !isRoot && !tp.has(pc);
+    var isGuide7 = chordMode && guide7.has(pc) && !isRoot && !tp.has(pc);
+    var isTension = chordMode && tp.has(pc) && !isRoot && !isGuide3 && !isGuide7;
+    var isAvoid = chordMode && av.has(pc) && !isRoot;
+    var isOvl = !chordMode && !isActive && !isRoot && !isBass && ovlPCS && ovlPCS.has(pc);
+    var isOvlChar = isOvl && ovlCharPCS && ovlCharPCS.has(pc);
+    var baseOff = isWhite ? '#eee' : '#222';
+    var fill, textColor, opacity = 1;
+    if (isRoot)          { fill = C.root; textColor = '#fff'; }
+    else if (isBass)     { fill = C.bass; textColor = '#000'; }
+    else if (isGuide3)   { fill = C.guide3; textColor = '#fff'; }
+    else if (isGuide7)   { fill = C.guide7; textColor = '#fff'; }
+    else if (isChar)     { fill = C.charNote || C.overlayChar; textColor = '#000'; }
+    else if (isAvoid)    { fill = C.avoid; textColor = '#fff'; }
+    else if (isTension)  { fill = C.tension; textColor = '#fff'; }
+    else if (isActive)   {
+      fill = isWhite ? (C.pianoChordWhite || '#90CAF9') : (C.pianoChordBlack || '#4A90D9');
+      textColor = isWhite ? '#333' : '#fff';
+    }
+    else if (isOvlChar)  {
+      fill = isWhite ? (C.pianoOverlayCharWhite || '#e8dfa0') : (C.overlayChar || '#F0E442');
+      textColor = '#666'; opacity = isWhite ? 1 : 0.6;
+    }
+    else if (isOvl)      {
+      fill = isWhite ? (C.pianoOverlayWhite || '#b8d8ec') : (C.overlay || '#56B4E9');
+      textColor = '#666'; opacity = isWhite ? 1 : 0.5;
+    }
+    else                 { fill = baseOff; textColor = null; }
+    var showLabel = isActive || isRoot || isBass || isOvl;
+    return { fill: fill, textColor: textColor, opacity: opacity, showLabel: showLabel };
+  }
+
+  var colorFn = keyColorFn || defaultKeyColor;
+
+  // --- White keys ---
+  var wx = startX;
+  for (var oct = 0; oct < numOctaves; oct++) {
+    for (var i = 0; i < 7; i++) {
+      var pc = whiteNotes[i];
+      var midi = startMidi + oct * 12 + pc;
+      var k = colorFn(pc, true, midi);
+      var rect = document.createElementNS(NS, 'rect');
+      rect.setAttribute('x', wx); rect.setAttribute('y', startY);
+      rect.setAttribute('width', whiteW - 1); rect.setAttribute('height', whiteH);
+      rect.setAttribute('rx', 1);
+      rect.setAttribute('fill', k.fill);
+      rect.setAttribute('stroke', '#bbb'); rect.setAttribute('stroke-width', 0.5);
+      svg.appendChild(rect);
+      if (k.showLabel) {
+        var wLabel = document.createElementNS(NS, 'text');
+        wLabel.setAttribute('x', wx + (whiteW - 1) / 2); wLabel.setAttribute('y', startY + whiteH - 6);
+        wLabel.setAttribute('text-anchor', 'middle');
+        wLabel.setAttribute('font-size', '10px');
+        wLabel.setAttribute('fill', k.textColor || '#333');
+        wLabel.setAttribute('font-weight', '700');
+        wLabel.textContent = labelFn(pc, midi);
+        svg.appendChild(wLabel);
+      }
+      wx += whiteW;
+    }
+  }
+
+  // --- Black keys ---
+  for (var boct = 0; boct < numOctaves; boct++) {
+    for (var bi = 0; bi < 5; bi++) {
+      var bpc = blackNotes[bi];
+      var bmidi = startMidi + boct * 12 + bpc;
+      var bk = colorFn(bpc, false, bmidi);
+      var whiteIdx = blackPositions[bi] + boct * 7;
+      var bx = startX + (whiteIdx + 1) * whiteW - blackW / 2;
+      var bRect = document.createElementNS(NS, 'rect');
+      bRect.setAttribute('x', bx); bRect.setAttribute('y', startY);
+      bRect.setAttribute('width', blackW); bRect.setAttribute('height', blackH);
+      bRect.setAttribute('rx', 1);
+      bRect.setAttribute('fill', bk.fill);
+      bRect.setAttribute('stroke', '#000'); bRect.setAttribute('stroke-width', 0.5);
+      if (bk.opacity < 1) bRect.setAttribute('opacity', bk.opacity);
+      svg.appendChild(bRect);
+      if (bk.showLabel) {
+        var bLabel = document.createElementNS(NS, 'text');
+        bLabel.setAttribute('x', bx + blackW / 2); bLabel.setAttribute('y', startY + blackH - 3);
+        bLabel.setAttribute('text-anchor', 'middle');
+        bLabel.setAttribute('font-size', '8px'); bLabel.setAttribute('fill', bk.textColor || '#fff');
+        bLabel.setAttribute('font-weight', '700');
+        bLabel.textContent = labelFn(bpc, bmidi);
+        svg.appendChild(bLabel);
+      }
+    }
+  }
+
+  // --- Selected note markers (white ring) ---
+  var whitePC = [0,2,4,5,7,9,11];
+  var pcToWhiteIdx = [0,0,1,1,2,3,3,4,4,5,5,6];
+  var pcToBlackIdx = [0,0,1,0,0,0,2,0,3,0,4,0];
+  for (var soct = 0; soct < numOctaves; soct++) {
+    for (var si = 0; si < 12; si++) {
+      var smidi = startMidi + soct * 12 + si;
+      if (!selectedNotes.has(smidi)) continue;
+      var sIsWhite = whitePC.indexOf(si) !== -1;
+      var scx, scy;
+      if (sIsWhite) {
+        scx = startX + (soct * 7 + pcToWhiteIdx[si]) * whiteW + (whiteW - 1) / 2;
+        scy = startY + whiteH - 12;
+      } else {
+        var sbPos = blackPositions[pcToBlackIdx[si]] + soct * 7;
+        scx = startX + (sbPos + 1) * whiteW;
+        scy = startY + blackH - 10;
+      }
+      var marker = document.createElementNS(NS, 'circle');
+      marker.setAttribute('cx', scx); marker.setAttribute('cy', scy);
+      marker.setAttribute('r', 5);
+      marker.setAttribute('fill', '#fff');
+      marker.setAttribute('stroke', '#333'); marker.setAttribute('stroke-width', 1.5);
+      svg.appendChild(marker);
+      var mLabel = document.createElementNS(NS, 'text');
+      mLabel.setAttribute('x', scx); mLabel.setAttribute('y', scy + 3);
+      mLabel.setAttribute('text-anchor', 'middle');
+      mLabel.setAttribute('font-size', '6px'); mLabel.setAttribute('fill', '#333');
+      mLabel.setAttribute('font-weight', '700');
+      mLabel.textContent = NOTE_NAMES_SHARP[si];
+      svg.appendChild(mLabel);
+    }
+  }
+
+  // --- Click handlers (white keys — below black key area) ---
+  if (onClick) {
+    for (var coct = 0; coct < numOctaves; coct++) {
+      for (var ci = 0; ci < 7; ci++) {
+        var cpc = whiteNotes[ci];
+        var cmidi = startMidi + coct * 12 + cpc;
+        var ckx = startX + (coct * 7 + ci) * whiteW;
+        var cHit = document.createElementNS(NS, 'rect');
+        cHit.setAttribute('x', ckx); cHit.setAttribute('y', startY + blackH);
+        cHit.setAttribute('width', whiteW); cHit.setAttribute('height', whiteH - blackH);
+        cHit.setAttribute('fill', 'transparent'); cHit.setAttribute('cursor', 'pointer');
+        cHit.dataset.midi = cmidi;
+        cHit.addEventListener('click', function() { onClick(parseInt(this.dataset.midi)); });
+        svg.appendChild(cHit);
+      }
+    }
+    // Black keys on top
+    for (var cboct = 0; cboct < numOctaves; cboct++) {
+      for (var cbi = 0; cbi < 5; cbi++) {
+        var cbpc = blackNotes[cbi];
+        var cbmidi = startMidi + cboct * 12 + cbpc;
+        var cbWhiteIdx = blackPositions[cbi] + cboct * 7;
+        var cbx = startX + (cbWhiteIdx + 1) * whiteW - blackW / 2;
+        var cbHit = document.createElementNS(NS, 'rect');
+        cbHit.setAttribute('x', cbx); cbHit.setAttribute('y', startY);
+        cbHit.setAttribute('width', blackW); cbHit.setAttribute('height', blackH);
+        cbHit.setAttribute('fill', 'transparent'); cbHit.setAttribute('cursor', 'pointer');
+        cbHit.dataset.midi = cbmidi;
+        cbHit.addEventListener('click', function() { onClick(parseInt(this.dataset.midi)); });
+        svg.appendChild(cbHit);
+      }
+    }
+  }
+
+  // --- Octave labels ---
+  for (var lo = 0; lo < numOctaves; lo++) {
+    var lox = startX + lo * 7 * whiteW;
+    var lt = document.createElementNS(NS, 'text');
+    lt.setAttribute('x', lox + 2); lt.setAttribute('y', startY + whiteH + 11);
+    lt.setAttribute('font-size', '8px'); lt.setAttribute('fill', '#888');
+    lt.textContent = 'C' + (startOctave + lo);
+    svg.appendChild(lt);
+  }
+}
+
 // Conditional exports for Node.js (Vitest) — ignored in browser
 if (typeof module !== 'undefined') module.exports = {
   padBaseMidi, padMidiNote, padNoteName,
   padDegreeName, padGridViewBox, padComputeBoxes,
-  padRenderGrid, padDrawBoxes, padRenderFretboard,
+  padRenderGrid, padDrawBoxes, padRenderFretboard, padRenderPiano,
 };
