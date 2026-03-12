@@ -1147,10 +1147,195 @@ function padRenderStaff(svg, opts) {
   }
 }
 
+// ======== RENDER STATE COMPUTATION ========
+
+function padComputeRenderState(opts) {
+  var o = opts || {};
+  var mode = o.mode || 'chord';
+  var key = o.key || 0;
+  var scaleIdx = o.scaleIdx || 0;
+  var builderRoot = o.builderRoot != null ? o.builderRoot : null;
+  var qualityPCS = o.qualityPCS || null;
+  var builderPCS = o.builderPCS || null;
+  var chordName = o.chordName || '';
+  var builderBass = o.builderBass != null ? o.builderBass : null;
+  var inputNotes = o.inputNotes || [];
+  var instrumentNotes = o.instrumentNotes || [];
+  var detectChordFn = o.detectChordFn || null;
+  var voicing = o.voicing || {};
+  var tasty = o.tasty || {};
+  var extNotes = o.extNotes || [];
+  var selectedPS = o.selectedPS || null;
+  var noRootLabel = o.noRootLabel || '...';
+
+  var activePCS, activeLabel, rootPC, bassPC = null;
+  var charPCS = new Set();
+  var omittedPCS = new Set();
+  var guide3PCS = new Set();
+  var guide7PCS = new Set();
+  var tensionPCS = new Set();
+  var avoidPCS = new Set();
+
+  if (mode === 'input') {
+    var notes = inputNotes.slice();
+    activePCS = new Set(notes.map(function(n) { return n % 12; }));
+    if (instrumentNotes.length > 0) {
+      var merged = new Set(instrumentNotes.concat(notes));
+      notes = Array.from(merged).sort(function(a, b) { return a - b; });
+      instrumentNotes.forEach(function(n) { activePCS.add(n % 12); });
+    }
+    rootPC = null;
+    if (notes.length >= 2 && detectChordFn) {
+      var candidates = detectChordFn(notes);
+      if (candidates.length > 0) rootPC = candidates[0].rootPC;
+    }
+    activeLabel = '';
+    return { activePCS: activePCS, activeLabel: activeLabel, rootPC: rootPC, bassPC: bassPC,
+      charPCS: charPCS, omittedPCS: omittedPCS, guide3PCS: guide3PCS, guide7PCS: guide7PCS,
+      tensionPCS: tensionPCS, qualityPCS: qualityPCS, avoidPCS: avoidPCS };
+  } else if (mode === 'scale') {
+    var scale = SCALES[scaleIdx];
+    activePCS = new Set(scale.pcs.map(function(pc) { return (pc + key) % 12; }));
+    rootPC = key;
+    activeLabel = padPcName(key, scaleIdx, key) + ' ' + scale.name;
+    if (scale.cn && scale.cn.length > 0) {
+      charPCS = new Set(scale.cn.map(function(pc) { return (pc + key) % 12; }));
+    }
+  } else {
+    rootPC = builderRoot !== null ? builderRoot : 0;
+    qualityPCS = qualityPCS;
+    if (builderPCS) {
+      activePCS = new Set(builderPCS.map(function(pc) { return (pc + rootPC) % 12; }));
+      builderPCS.filter(function(pc) { return pc >= 12; }).forEach(function(pc) {
+        tensionPCS.add((pc + rootPC) % 12);
+      });
+      activeLabel = chordName;
+      if (builderBass !== null) bassPC = builderBass;
+      // Voicing modifications
+      var p5 = (rootPC + 7) % 12;
+      var p3maj = (rootPC + 4) % 12;
+      var p3min = (rootPC + 3) % 12;
+      if (voicing.omit5 && activePCS.has(p5)) {
+        activePCS.delete(p5); omittedPCS.add(p5);
+      }
+      if (voicing.rootless && activePCS.has(rootPC)) {
+        activePCS.delete(rootPC); omittedPCS.add(rootPC);
+      }
+      if (voicing.omit3) {
+        if (activePCS.has(p3maj)) { activePCS.delete(p3maj); omittedPCS.add(p3maj); }
+        if (activePCS.has(p3min)) { activePCS.delete(p3min); omittedPCS.add(p3min); }
+      }
+      // Shell voicing
+      if (voicing.shell) {
+        var shellIntervals = new Set([0]);
+        [3, 4].forEach(function(iv) { shellIntervals.add(iv); });
+        [10, 11].forEach(function(iv) { shellIntervals.add(iv); });
+        if (qualityPCS && qualityPCS.includes(9) && !qualityPCS.includes(10) && !qualityPCS.includes(11)) {
+          shellIntervals.add(9);
+        }
+        Array.from(activePCS).forEach(function(pc) {
+          var iv = ((pc - rootPC) + 12) % 12;
+          if (!shellIntervals.has(iv) && !tensionPCS.has(pc)) {
+            activePCS.delete(pc); omittedPCS.add(pc);
+          }
+        });
+      }
+      // Guide tones
+      [3, 4].forEach(function(iv) { var pc = (rootPC + iv) % 12; if (activePCS.has(pc)) guide3PCS.add(pc); });
+      [10, 11].forEach(function(iv) { var pc = (rootPC + iv) % 12; if (activePCS.has(pc)) guide7PCS.add(pc); });
+      if (qualityPCS && qualityPCS.includes(9) && !qualityPCS.includes(10) && !qualityPCS.includes(11)) {
+        var pc6 = (rootPC + 9) % 12; if (activePCS.has(pc6)) guide7PCS.add(pc6);
+      }
+    } else {
+      activePCS = new Set();
+      activeLabel = builderRoot !== null ? padPcName(builderRoot, scaleIdx, key) + '...' : noRootLabel;
+    }
+  }
+
+  // Tasty voicing override
+  var tastyMidiSet = null;
+  var tastyDegreeMap = null;
+  var tastyTopMidi = null;
+  if (mode === 'chord' && tasty.enabled && tasty.midiNotes && tasty.midiNotes.length > 0) {
+    tastyDegreeMap = tasty.degreeMap || {};
+    if (tasty.boxSelected) {
+      tastyMidiSet = new Set(tasty.midiNotes);
+      tastyTopMidi = tasty.topNote;
+    }
+    activePCS = new Set(tasty.midiNotes.map(function(m) { return m % 12; }));
+    guide3PCS = new Set(); guide7PCS = new Set(); tensionPCS = new Set();
+    omittedPCS = new Set();
+    for (var ti = 0; ti < tasty.midiNotes.length; ti++) {
+      var tm = tasty.midiNotes[ti];
+      var td = tastyDegreeMap[tm];
+      var tpc = tm % 12;
+      if (!td) continue;
+      if (td === '3' || td === 'b3') guide3PCS.add(tpc);
+      else if (td === '7' || td === 'b7' || td === '6') guide7PCS.add(tpc);
+      else if (td !== '1' && td !== '5' && td !== 'b5' && td !== '#5') tensionPCS.add(tpc);
+    }
+  }
+
+  // ExtNotes override
+  if (mode === 'chord' && !tastyMidiSet && extNotes.length > 0) {
+    activePCS = new Set(extNotes.map(function(n) { return n % 12; }));
+    if (detectChordFn) {
+      var detected = detectChordFn(extNotes);
+      if (detected.length > 0) {
+        rootPC = detected[0].rootPC;
+        activeLabel = detected[0].name;
+      } else if (extNotes.length > 0) {
+        rootPC = extNotes[0] % 12;
+        activeLabel = Array.from(activePCS).map(function(pc) { return NOTE_NAMES_SHARP[pc]; }).join(' ');
+      }
+    }
+    guide3PCS = new Set(); guide7PCS = new Set(); tensionPCS = new Set();
+    omittedPCS = new Set(); charPCS = new Set();
+    [3, 4].forEach(function(iv) { var pc = (rootPC + iv) % 12; if (activePCS.has(pc)) guide3PCS.add(pc); });
+    [10, 11].forEach(function(iv) { var pc = (rootPC + iv) % 12; if (activePCS.has(pc)) guide7PCS.add(pc); });
+  }
+
+  // Avoid notes
+  avoidPCS = new Set();
+  if (mode === 'chord' && tensionPCS.size > 0) {
+    var baseTones = new Set(Array.from(activePCS).filter(function(pc) { return !tensionPCS.has(pc); }));
+    omittedPCS.forEach(function(pc) { baseTones.add(pc); });
+    tensionPCS.forEach(function(tpc) {
+      var below = (tpc - 1 + 12) % 12;
+      if (baseTones.has(below)) avoidPCS.add(tpc);
+    });
+  }
+
+  // Interval-based PCS
+  var activeIvPCS = (mode === 'chord' && activePCS && activePCS.size > 0)
+    ? new Set(Array.from(activePCS).map(function(pc) { return ((pc - rootPC) % 12 + 12) % 12; }))
+    : null;
+
+  // Scale overlay
+  var overlayPCS = null, overlayCharPCS = new Set();
+  if (mode === 'chord' && selectedPS) {
+    var ovlScale = SCALES[selectedPS.scaleIdx];
+    overlayPCS = new Set(ovlScale.pcs.map(function(iv) { return (iv + rootPC) % 12; }));
+    if (ovlScale.cn && ovlScale.cn.length > 0) {
+      overlayCharPCS = new Set(ovlScale.cn.map(function(iv) { return (iv + rootPC) % 12; }));
+    }
+  }
+
+  return {
+    activePCS: activePCS, activeIvPCS: activeIvPCS, activeLabel: activeLabel,
+    rootPC: rootPC, bassPC: bassPC, charPCS: charPCS, omittedPCS: omittedPCS,
+    guide3PCS: guide3PCS, guide7PCS: guide7PCS, tensionPCS: tensionPCS,
+    qualityPCS: qualityPCS, avoidPCS: avoidPCS,
+    overlayPCS: overlayPCS, overlayCharPCS: overlayCharPCS,
+    tastyMidiSet: tastyMidiSet, tastyDegreeMap: tastyDegreeMap, tastyTopMidi: tastyTopMidi
+  };
+}
+
 // Conditional exports for Node.js (Vitest) — ignored in browser
 if (typeof module !== 'undefined') module.exports = {
   padBaseMidi, padMidiNote, padNoteName,
   padDegreeName, padGridViewBox, padComputeBoxes,
   padRenderGrid, padDrawBoxes, padRenderFretboard, padRenderPiano,
   padMidiToStaffPos, padDegreeAwareStaffPos, padRenderStaff,
+  padComputeRenderState,
 };
