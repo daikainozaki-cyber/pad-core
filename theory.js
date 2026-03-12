@@ -682,18 +682,19 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
 
   // Scoring weights: override via options.weights for genre presets (bossa/jazz/funk)
   var W = options.weights || {};
-  var wRootBass   = W.rootBass   !== undefined ? W.rootBass   : 1000;
-  var wFifthBass  = W.fifthBass  !== undefined ? W.fifthBass  : 0;
+  var wRootBass   = W.rootBass   !== undefined ? W.rootBass   : 120;
+  var wFifthBass  = W.fifthBass  !== undefined ? W.fifthBass  : 100;
   var wRootStr6   = W.rootStr6   !== undefined ? W.rootStr6   : 50;
   var wRootStr5   = W.rootStr5   !== undefined ? W.rootStr5   : 30;
   var wRootStr4   = W.rootStr4   !== undefined ? W.rootStr4   : 20;
-  var wTop4       = W.top4       !== undefined ? W.top4       : 80;
+  var wTop4       = W.top4       !== undefined ? W.top4       : 30;
   var wGuideTone  = W.guideTone  !== undefined ? W.guideTone  : 40;
   var wOpenStr    = W.openStr    !== undefined ? W.openStr    : 15;
   var wStringCount= W.stringCount!== undefined ? W.stringCount: 30;
-  var wAvgFret    = W.avgFret    !== undefined ? W.avgFret    : 8;
+  var wAvgFret    = W.avgFret    !== undefined ? W.avgFret    : 15;
   var wSpan       = W.span       !== undefined ? W.span       : 10;
   var wGaps       = W.gaps       !== undefined ? W.gaps       : 15;
+  var wFullFret   = W.fullFret   !== undefined ? W.fullFret   : 15;
 
   // Fifth is optional when chord has tensions (9th+), since guitar has only 6 strings.
   // BUT: altered 5ths (b5=6, #5=8) that REPLACE the natural 5th define chord quality
@@ -709,8 +710,14 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
     if (iv === 6 || iv === 8) hasAltered5th = true;
   }
   var alteredFifthIsChordTone = hasAltered5th && !hasNatural5th;
-  // fifthOptional option: jazz/bossa fingerstyle (4 fingers = 4 strings practical limit)
-  var fifthIsOptional = (hasTensions || !!options.fifthOptional) && !alteredFifthIsChordTone;
+  // Fifth is optional when: tensions (9th+), 7th/6th present (R37 shell is standard),
+  // or fifthOptional option. Guitar has 4 fingers = 5th is first to drop.
+  var has7or6 = false;
+  for (var i = 0; i < chordPCS.length; i++) {
+    var iv = chordPCS[i] % 12;
+    if (iv === 9 || iv === 10 || iv === 11) has7or6 = true;
+  }
+  var fifthIsOptional = (hasTensions || has7or6 || !!options.fifthOptional) && !alteredFifthIsChordTone;
 
   // Compute absolute pitch class set
   var chordAbsPCS = {};
@@ -810,19 +817,27 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       if (fingerUnits > 4) return;
 
       // Above-barre spread check: notes above the barre must be within a
-      // 4-string window (hand can't span the whole neck above a barre)
+      // reasonable window. Relaxed when fret difference is small (1-2 frets)
+      // because fingers can reach across the neck at adjacent frets easily
+      // (e.g. G chord 320003: fret 3 on strings 1 and 6, barre at fret 2).
       if (minFrettedFret < Infinity) {
-        var aboveMinStr = -1, aboveMaxStr = -1;
+        var aboveMinStr = -1, aboveMaxStr = -1, maxAboveFret = 0;
         for (var i = 0; i < numStrings; i++) {
           if (chosen[i] !== null && chosen[i] > minFrettedFret) {
             if (aboveMinStr === -1) aboveMinStr = i;
             aboveMaxStr = i;
+            if (chosen[i] > maxAboveFret) maxAboveFret = chosen[i];
           }
         }
-        if (aboveMaxStr - aboveMinStr > 3) return;
+        var aboveSpread = aboveMaxStr - aboveMinStr;
+        var aboveFretDiff = maxAboveFret - minFrettedFret;
+        // Wide spread only OK if fret difference is small (1-2 frets)
+        if (aboveSpread > 3 && aboveFretDiff > 2) return;
       }
 
       // Count gaps (muted strings between outermost sounding strings)
+      // Also count "open gaps": muted string adjacent to an open string
+      // = fingerpicking only (can't strum/mute cleanly)
       var hiStr = -1, loStr = -1; // hiStr = lowest index (highest pitch)
       for (var i = 0; i < numStrings; i++) {
         if (chosen[i] !== null) {
@@ -830,9 +845,36 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
           loStr = i;
         }
       }
-      var gaps = 0;
+      var gaps = 0, openGaps = 0;
       for (var i = hiStr + 1; i < loStr; i++) {
-        if (chosen[i] === null) gaps++;
+        if (chosen[i] === null) {
+          gaps++;
+          // Check if adjacent sounding strings include an open string
+          var prevOpen = (i > 0 && chosen[i - 1] === 0);
+          var nextOpen = false;
+          for (var j = i + 1; j < numStrings; j++) {
+            if (chosen[j] !== null) { nextOpen = (chosen[j] === 0); break; }
+          }
+          if (prevOpen || nextOpen) openGaps++;
+        }
+      }
+
+      // Sandwiched open: open string between two fretted strings.
+      // Open string vibration clashes with fretted notes — uncommon technique.
+      var sandwichedOpen = 0;
+      for (var i = hiStr; i <= loStr; i++) {
+        if (chosen[i] !== 0) continue;
+        // Find nearest sounding string on each side
+        var leftFretted = false, rightFretted = false;
+        for (var j = i - 1; j >= 0; j--) {
+          if (chosen[j] === null) continue;
+          leftFretted = (chosen[j] > 0); break;
+        }
+        for (var j = i + 1; j < numStrings; j++) {
+          if (chosen[j] === null) continue;
+          rightFretted = (chosen[j] > 0); break;
+        }
+        if (leftFretted && rightFretted) sandwichedOpen++;
       }
 
       results.push({
@@ -844,6 +886,8 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
         stringCount: count,
         span: span,
         gaps: gaps,
+        openGaps: openGaps,
+        sandwichedOpen: sandwichedOpen,
         fingerUnits: fingerUnits,
       });
       return;
@@ -919,14 +963,26 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
     if (has3rdInForm && has7thInForm) guideToneBonus = wGuideTone;
     else if (has3rdInForm && has6thInForm && has6thInChord && !has7thInChord) guideToneBonus = wGuideTone;
 
-    // Open string bonus: open strings resonate with natural harmonics,
-    // essential for bossa/folk/singer-songwriter voicings
+    // Open string bonus/penalty: sliding scale based on fret position.
+    // Pure open chord (avgFret≈1): full bonus. Higher frets: bonus shrinks
+    // then flips to penalty. Standard barre always beats scattered open+fret.
     var openBonus = 0;
+    var openCount = 0;
     if (!noOpen) {
       for (var i = 0; i < r.frets.length; i++) {
-        if (r.frets[i] === 0) openBonus += wOpenStr;
+        if (r.frets[i] === 0) openCount++;
+      }
+      if (openCount > 0) {
+        // factor: 1.0 at avgFret=0, 0.0 at avgFret=2.5, negative above
+        var openFactor = 1 - (avgFret / 2.5);
+        openBonus = openCount * wOpenStr * openFactor;
       }
     }
+
+    // Full-fret bonus: all sounding strings are fretted (no open strings).
+    // Rewards standard barre shapes over open-string variants at same position.
+    var fullFretBonus = 0;
+    if (openCount === 0) fullFretBonus = wFullFret;
 
     return (r.rootInBass ? wRootBass : 0)
       + fifthBassBonus
@@ -934,10 +990,13 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       + top4Bonus
       + guideToneBonus
       + openBonus
+      + fullFretBonus
       + r.stringCount * wStringCount
       - avgFret * wAvgFret
       - r.span * wSpan
-      - r.gaps * wGaps;
+      - r.gaps * wGaps
+      - r.openGaps * 40 // fingerpicking-only: mute between open strings
+      - r.sandwichedOpen * 25; // open string vibration clashes with fretted neighbors
   }
 
   if (allowRootless) {
@@ -960,6 +1019,298 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
   return results.slice(0, maxResults);
 }
 
+// ======== CHORD DETECTION ========
+// Detect chord name from MIDI notes. Returns array of {name, rootPC, score} sorted by score.
+// Uses CHORD_DETECT_DB, TRIAD_DETECT_DB, TETRAD_DETECT_DB from data.js.
+
+function padDetectChord(midiNotes) {
+  if (midiNotes.length < 2) return [];
+  var pcs = [];
+  var seen = {};
+  for (var i = 0; i < midiNotes.length; i++) {
+    var pc = midiNotes[i] % 12;
+    if (!seen[pc]) { seen[pc] = true; pcs.push(pc); }
+  }
+  pcs.sort(function(a, b) { return a - b; });
+  if (pcs.length < 2) return [];
+  var lowestPC = midiNotes[0];
+  for (var i = 1; i < midiNotes.length; i++) {
+    if (midiNotes[i] < lowestPC) lowestPC = midiNotes[i];
+  }
+  lowestPC = lowestPC % 12;
+  var candidates = [];
+  var seenNames = {};
+
+  for (var ri = 0; ri < pcs.length; ri++) {
+    var rootPC = pcs[ri];
+    var intervals = {};
+    for (var j = 0; j < pcs.length; j++) {
+      intervals[((pcs[j] - rootPC) + 12) % 12] = true;
+    }
+    for (var ci = 0; ci < CHORD_DETECT_DB.length; ci++) {
+      var chord = CHORD_DETECT_DB[ci];
+      // Exact match (allow 1 extra note)
+      if (chord.pcs.length <= pcs.length + 1) {
+        var matched = 0;
+        for (var k = 0; k < chord.pcs.length; k++) {
+          if (intervals[chord.pcs[k]]) matched++;
+        }
+        if (matched === chord.pcs.length) {
+          var extra = pcs.length - chord.pcs.length;
+          var isRootPosition = rootPC === lowestPC;
+          var score = (isRootPosition ? 100 : 0) + chord.pcs.length * 10 - extra;
+          var rootName = NOTE_NAMES_SHARP[rootPC];
+          var bass = lowestPC !== rootPC ? ' / ' + NOTE_NAMES_SHARP[lowestPC] : '';
+          var name = rootName + chord.name + bass;
+          if (!seenNames[name]) {
+            seenNames[name] = true;
+            candidates.push({ name: name, rootPC: rootPC, score: score });
+          }
+        }
+      }
+      // Omit5 match: 4+ note chords containing 5th (7) — also check without 5th
+      if (chord.pcs.length >= 4 && chord.pcs.indexOf(7) !== -1) {
+        var omit5pcs = [];
+        for (var k = 0; k < chord.pcs.length; k++) {
+          if (chord.pcs[k] !== 7) omit5pcs.push(chord.pcs[k]);
+        }
+        if (omit5pcs.length <= pcs.length + 1) {
+          var matched = 0;
+          for (var k = 0; k < omit5pcs.length; k++) {
+            if (intervals[omit5pcs[k]]) matched++;
+          }
+          if (matched === omit5pcs.length) {
+            var extra = pcs.length - omit5pcs.length;
+            var isRootPosition = rootPC === lowestPC;
+            var score = (isRootPosition ? 100 : 0) + chord.pcs.length * 10 - extra - 5;
+            var rootName = NOTE_NAMES_SHARP[rootPC];
+            var bass = lowestPC !== rootPC ? ' / ' + NOTE_NAMES_SHARP[lowestPC] : '';
+            var omitLabel = chord.pcs.length >= 5 ? '' : '(omit5)';
+            var name = rootName + chord.name + omitLabel + bass;
+            if (!seenNames[name]) {
+              seenNames[name] = true;
+              candidates.push({ name: name, rootPC: rootPC, score: score });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Bass + Triad detection
+  if (pcs.length >= 3) {
+    var upperPCs = [];
+    for (var i = 0; i < pcs.length; i++) {
+      if (pcs[i] !== lowestPC) upperPCs.push(pcs[i]);
+    }
+    if (upperPCs.length >= 3) {
+      for (var ti = 0; ti < upperPCs.length; ti++) {
+        var triadRoot = upperPCs[ti];
+        var triadIntervals = {};
+        for (var j = 0; j < upperPCs.length; j++) {
+          triadIntervals[((upperPCs[j] - triadRoot) + 12) % 12] = true;
+        }
+        for (var di = 0; di < TRIAD_DETECT_DB.length; di++) {
+          var triad = TRIAD_DETECT_DB[di];
+          var matched = 0;
+          for (var k = 0; k < triad.pcs.length; k++) {
+            if (triadIntervals[triad.pcs[k]]) matched++;
+          }
+          if (matched === triad.pcs.length) {
+            var triadName = NOTE_NAMES_SHARP[triadRoot] + (triad.name === 'Maj' ? '' : triad.name);
+            var bassName = NOTE_NAMES_SHARP[lowestPC];
+            var name = triadName + ' / ' + bassName;
+            if (!seenNames[name]) {
+              seenNames[name] = true;
+              var isTriadRoot = triadRoot === lowestPC;
+              var score = (isTriadRoot ? 100 : 0) + 25;
+              candidates.push({ name: name, rootPC: triadRoot, score: score });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Bass + Tetrad detection
+  if (pcs.length >= 4) {
+    var upperPCs = [];
+    for (var i = 0; i < pcs.length; i++) {
+      if (pcs[i] !== lowestPC) upperPCs.push(pcs[i]);
+    }
+    if (upperPCs.length >= 4) {
+      for (var ti = 0; ti < upperPCs.length; ti++) {
+        var tetRoot = upperPCs[ti];
+        var tetIntervals = {};
+        for (var j = 0; j < upperPCs.length; j++) {
+          tetIntervals[((upperPCs[j] - tetRoot) + 12) % 12] = true;
+        }
+        for (var di = 0; di < TETRAD_DETECT_DB.length; di++) {
+          var tet = TETRAD_DETECT_DB[di];
+          var matched = 0;
+          for (var k = 0; k < tet.pcs.length; k++) {
+            if (tetIntervals[tet.pcs[k]]) matched++;
+          }
+          if (matched === tet.pcs.length) {
+            var tetName = NOTE_NAMES_SHARP[tetRoot] + tet.name;
+            var bassName = NOTE_NAMES_SHARP[lowestPC];
+            if (tetRoot === lowestPC) continue;
+            var name = tetName + ' / ' + bassName;
+            if (!seenNames[name]) {
+              seenNames[name] = true;
+              var score = 30 + tet.pcs.length * 5;
+              candidates.push({ name: name, rootPC: tetRoot, score: score });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 6th + 7th → 13th tension rename
+  for (var i = 0; i < candidates.length; i++) {
+    var c = candidates[i];
+    var rootIntervals = {};
+    for (var j = 0; j < pcs.length; j++) {
+      rootIntervals[((pcs[j] - c.rootPC) + 12) % 12] = true;
+    }
+    var has7th = rootIntervals[10] || rootIntervals[11];
+    if (has7th) {
+      var is7 = rootIntervals[10];
+      var sfx = is7 ? '7' : '△7';
+      c.name = c.name.replace(/^([A-G]#?)6\/9(\(omit5\))?/, '$1' + sfx + '(9,13)');
+      c.name = c.name.replace(/^([A-G]#?)m6\/9(\(omit5\))?/, '$1m' + sfx + '(9,13)');
+      c.name = c.name.replace(/^([A-G]#?)6(\(omit5\))?/, '$1' + sfx + '(13)');
+      c.name = c.name.replace(/^([A-G]#?)m6(\(omit5\))?/, '$1m' + sfx + '(13)');
+    }
+  }
+
+  candidates.sort(function(a, b) { return b.score - a.score; });
+  return candidates.slice(0, 8);
+}
+
+// ======== STOCK VOICING MATCHING ========
+// Parse stock-voicings.json into flat array of entries with semitone arrays.
+// Input: raw JSON object (parsed stock-voicings.json).
+// Output: array of { id, name, label, category, subtype, lhSemitones, rhSemitones, allSemitones, pcCount }
+
+function padParseStockVoicings(jsonData) {
+  var entries = [];
+  var categories = Object.keys(jsonData);
+  for (var ci = 0; ci < categories.length; ci++) {
+    var cat = categories[ci];
+    if (cat === '_meta') continue;
+    var subtypes = Object.keys(jsonData[cat]);
+    for (var si = 0; si < subtypes.length; si++) {
+      var sub = subtypes[si];
+      var voicings = jsonData[cat][sub];
+      for (var vi = 0; vi < voicings.length; vi++) {
+        var v = voicings[vi];
+        if ((!v.LH || v.LH.length === 0) && (!v.RH || v.RH.length === 0)) continue;
+        var lh = [], rh = [];
+        for (var i = 0; i < (v.LH || []).length; i++) {
+          var s = DEGREE_TO_SEMITONE[v.LH[i]];
+          if (s !== undefined) lh.push(s);
+        }
+        for (var i = 0; i < (v.RH || []).length; i++) {
+          var s = DEGREE_TO_SEMITONE[v.RH[i]];
+          if (s !== undefined) rh.push(s);
+        }
+        var seen = {};
+        var all = [];
+        for (var i = 0; i < lh.length; i++) {
+          if (!seen[lh[i]]) { seen[lh[i]] = true; all.push(lh[i]); }
+        }
+        for (var i = 0; i < rh.length; i++) {
+          if (!seen[rh[i]]) { seen[rh[i]] = true; all.push(rh[i]); }
+        }
+        entries.push({
+          id: v.id, name: v.name, label: v.label,
+          category: cat, subtype: sub,
+          lhSemitones: lh, rhSemitones: rh,
+          allSemitones: all, pcCount: all.length,
+        });
+      }
+    }
+  }
+  return entries;
+}
+
+// Match MIDI notes against stock voicing patterns.
+// rootPC: 0-11 (pitch class of root). midiNotes: array of MIDI values.
+// stockEntries: output of padParseStockVoicings().
+// Returns array of { id, name, label, category, subtype, score, matched, total } sorted by score.
+
+function padMatchStockVoicing(rootPC, midiNotes, stockEntries) {
+  if (!midiNotes || midiNotes.length < 2 || !stockEntries) return [];
+
+  // Convert MIDI notes to interval set (semitones from root, mod 12)
+  var intervalSet = {};
+  var intervalCount = 0;
+  for (var i = 0; i < midiNotes.length; i++) {
+    var iv = ((midiNotes[i] % 12) - rootPC + 12) % 12;
+    if (!intervalSet[iv]) { intervalSet[iv] = true; intervalCount++; }
+  }
+
+  var results = [];
+  for (var i = 0; i < stockEntries.length; i++) {
+    var entry = stockEntries[i];
+    var all = entry.allSemitones;
+    if (all.length === 0) continue;
+
+    // Count how many of the stock voicing's degrees are in our input
+    var matched = 0;
+    for (var j = 0; j < all.length; j++) {
+      if (intervalSet[all[j]]) matched++;
+    }
+    if (matched === 0) continue;
+
+    // Jaccard similarity: intersection / union
+    var union = intervalCount + all.length - matched;
+    var score = matched / union;
+
+    // Exact match bonus
+    if (matched === all.length && all.length === intervalCount) score = 1.0;
+
+    if (score < 0.5) continue;
+
+    results.push({
+      id: entry.id, name: entry.name, label: entry.label,
+      category: entry.category, subtype: entry.subtype,
+      score: Math.round(score * 100) / 100,
+      matched: matched, total: all.length,
+    });
+  }
+
+  results.sort(function(a, b) {
+    return b.score - a.score || b.matched - a.matched;
+  });
+  return results.slice(0, 8);
+}
+
+// ======== PITCH CLASS CLASSIFICATION ========
+
+/**
+ * Classify a pitch class by its role in the current chord context.
+ * Returns: 'root' | 'bass' | 'guide3' | 'guide7' | 'tension' | 'inactive'
+ * Pure function — no global state reads.
+ */
+function padClassifyPC(pc, rootPC, bassPC, activePCS, guide3Set, guide7Set) {
+  if (!activePCS || !activePCS.has(pc)) return 'inactive';
+  if (pc === rootPC) return 'root';
+  if (bassPC !== null && bassPC !== undefined && pc === bassPC && pc !== rootPC) return 'bass';
+  if (guide3Set && guide3Set.has(pc)) return 'guide3';
+  if (guide7Set && guide7Set.has(pc)) return 'guide7';
+  return 'tension';
+}
+
+/**
+ * Get the color for a pitch class classification from a theme object.
+ */
+function padClassifyColor(classification, theme) {
+  return (theme || PAD_THEME_OKABE_ITO)[classification] || (theme || PAD_THEME_OKABE_ITO).inactive;
+}
+
 // Conditional exports for Node.js (Vitest) — ignored in browser
 if (typeof module !== 'undefined') module.exports = {
   padParseRoot, padParseChordName,
@@ -969,6 +1320,8 @@ if (typeof module !== 'undefined') module.exports = {
   padGetShellIntervals, padCalcAllVoicingPositions,
   padChordContextKey, padGetBuilderChordName,
   padGetDiatonicTetrads, padFindParentScales,
-  padEnumGuitarChordForms,
+  padEnumGuitarChordForms, padDetectChord,
+  padParseStockVoicings, padMatchStockVoicing,
+  padClassifyPC, padClassifyColor,
   DIATONIC_CHORD_DB,
 };

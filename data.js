@@ -175,6 +175,14 @@ const TENSION_ROWS = [
   ],
 ];
 
+// ======== DEGREE NAME ↔ SEMITONE ========
+// Complete mapping: chord tones + tensions + enharmonic aliases (superset of TENSION_NAME_TO_PC)
+var DEGREE_TO_SEMITONE = {
+  '1':0, 'b9':1, '9':2, '#9':3, 'b3':3, '3':4, '11':5,
+  '#11':6, 'b5':6, '5':7, '#5':8, 'b13':8, '13':9, '6':9,
+  'b7':10, '7':11, 'bb7':9
+};
+
 // ======== AVAILABLE TENSIONS PER SCALE ========
 const PC_TO_TENSION_NAME = { 1:'b9', 2:'9', 3:'#9', 5:'11', 6:'#11', 8:'b13', 9:'13' };
 const TENSION_NAME_TO_PC = { 'b9':1, '9':2, '#9':3, '11':5, '#11':6, 'b13':8, '13':9 };
@@ -283,6 +291,7 @@ var PAD_QUALITY_INTERVALS = {
   '\u00F87':  [0, 3, 6, 10],  // ø7
   '\u00B07':  [0, 3, 6, 9],   // °7
   // Short forms
+  'mMaj7': [0, 3, 7, 11],
   'mM7':  [0, 3, 7, 11],
   '6/9':  [0, 4, 7, 9, 14],
   '7#9':  [0, 4, 7, 10, 15],
@@ -328,6 +337,8 @@ var PAD_QUALITY_DISPLAY = {
   '\u00F8': 'm7b5',  // ø
   '\u00B0': 'dim',   // °
   'M7':  'maj7',
+  'mMaj7': 'm\u25B37',  // mMaj7 → m△7
+  'mM7': 'm\u25B37',    // mM7 → m△7
 };
 
 // ======== PAD GRID CONSTANTS ========
@@ -378,13 +389,130 @@ const PAD_GUITAR_NAMES  = ['E', 'B', 'G', 'D', 'A', 'E'];
 const PAD_BASS_TUNING = [43, 38, 33, 28];
 const PAD_BASS_NAMES  = ['G', 'D', 'A', 'E'];
 
+
+// ======== CHORD DETECTION DATABASE ========
+// Built from BUILDER_QUALITIES + tension extensions for chord detection
+
+function padBuildChordDetectDB() {
+  var db = [];
+  BUILDER_QUALITIES.flat().forEach(function(q) {
+    if (!q) return;
+    db.push({ name: q.name || 'Maj', pcs: q.pcs, pcsSet: new Set(q.pcs) });
+  });
+  var tensionChords = [
+    // 9th chords
+    { name: '7(9)', pcs: [0,4,7,10,2] },
+    { name: 'm7(9)', pcs: [0,3,7,10,2] },
+    { name: '△7(9)', pcs: [0,4,7,11,2] },
+    { name: '6/9', pcs: [0,4,7,9,2] },
+    { name: 'm6/9', pcs: [0,3,7,9,2] },
+    { name: '7(b9)', pcs: [0,4,7,10,1] },
+    { name: '7(#9)', pcs: [0,4,7,10,3] },
+    { name: 'm7(b9)', pcs: [0,3,7,10,1] },
+    // 11th chords
+    { name: '7(9,11)', pcs: [0,4,7,10,2,5] },
+    { name: 'm7(9,11)', pcs: [0,3,7,10,2,5] },
+    { name: '△7(9,#11)', pcs: [0,4,7,11,2,6] },
+    { name: '7(#11)', pcs: [0,4,7,10,6] },
+    // 13th chords
+    { name: '7(9,13)', pcs: [0,4,7,10,2,9] },
+    { name: 'm7(9,13)', pcs: [0,3,7,10,2,9] },
+    { name: '△7(9,13)', pcs: [0,4,7,11,2,9] },
+    { name: '7(b13)', pcs: [0,4,7,10,8] },
+    // Combined tensions
+    { name: '7(9,#11)', pcs: [0,4,7,10,2,6] },
+    { name: '7(9,b13)', pcs: [0,4,7,10,2,8] },
+    { name: '7(b9,#11)', pcs: [0,4,7,10,1,6] },
+    { name: '7(b9,b13)', pcs: [0,4,7,10,1,8] },
+    { name: '7(#9,b13)', pcs: [0,4,7,10,3,8] },
+    { name: '7(b9,13)', pcs: [0,4,7,10,1,9] },
+    { name: '7(#9,13)', pcs: [0,4,7,10,3,9] },
+    { name: '7(#11,13)', pcs: [0,4,7,10,6,9] },
+    { name: '7(9,#11,13)', pcs: [0,4,7,10,2,6,9] },
+    { name: '7(b9,#11,13)', pcs: [0,4,7,10,1,6,9] },
+    // Compact combined tensions (no 5th)
+    { name: '7(9,#11)', pcs: [0,4,10,2,6] },
+    { name: '7(9,b13)', pcs: [0,4,10,2,8] },
+    { name: '7(9,13)', pcs: [0,4,10,2,9] },
+    { name: '7(b9,#11)', pcs: [0,4,10,1,6] },
+    { name: '7(b9,b13)', pcs: [0,4,10,1,8] },
+    { name: '7(b9,13)', pcs: [0,4,10,1,9] },
+    { name: '7(#9,b13)', pcs: [0,4,10,3,8] },
+    { name: '7(#9,13)', pcs: [0,4,10,3,9] },
+    { name: '7(#11,13)', pcs: [0,4,10,6,9] },
+    // Compact tension voicings (no 5th)
+    { name: '7(13)', pcs: [0,4,10,9] },
+    { name: 'm7(13)', pcs: [0,3,10,9] },
+    { name: '△7(13)', pcs: [0,4,11,9] },
+    { name: '7(11)', pcs: [0,4,10,5] },
+    { name: 'm7(11)', pcs: [0,3,10,5] },
+    { name: '7(9)', pcs: [0,4,10,2] },
+    { name: 'm7(9)', pcs: [0,3,10,2] },
+    { name: '△7(9)', pcs: [0,4,11,2] },
+    // sus chords
+    { name: 'sus4', pcs: [0,5,7] },
+    { name: 'sus2', pcs: [0,2,7] },
+    { name: '7sus4', pcs: [0,5,7,10] },
+    { name: '7sus4(9)', pcs: [0,5,7,10,2] },
+    { name: '7sus4(9)', pcs: [0,5,10,2] },
+    { name: '7sus4(9,13)', pcs: [0,5,7,10,2,9] },
+    { name: '7sus4(9,13)', pcs: [0,5,10,2,9] },
+    { name: '7sus4(b9)', pcs: [0,5,7,10,1] },
+    { name: '7sus4(b9)', pcs: [0,5,10,1] },
+    // add chords
+    { name: 'add9', pcs: [0,4,7,2] },
+    { name: 'madd9', pcs: [0,3,7,2] },
+  ];
+  tensionChords.forEach(function(c) {
+    db.push({ name: c.name, pcs: c.pcs, pcsSet: new Set(c.pcs) });
+  });
+  return db;
+}
+var CHORD_DETECT_DB = padBuildChordDetectDB();
+
+var TRIAD_DETECT_DB = [
+  { name: 'Maj', pcs: [0,4,7] },
+  { name: 'm', pcs: [0,3,7] },
+  { name: 'dim', pcs: [0,3,6] },
+  { name: 'aug', pcs: [0,4,8] },
+  { name: 'sus4', pcs: [0,5,7] },
+  { name: 'sus2', pcs: [0,2,7] },
+];
+
+var TETRAD_DETECT_DB = [
+  { name: '△7', pcs: [0,4,7,11] },
+  { name: '7', pcs: [0,4,7,10] },
+  { name: 'm7', pcs: [0,3,7,10] },
+  { name: 'm△7', pcs: [0,3,7,11] },
+  { name: 'm7(b5)', pcs: [0,3,6,10] },
+  { name: 'dim7', pcs: [0,3,6,9] },
+  { name: '6', pcs: [0,4,7,9] },
+  { name: 'm6', pcs: [0,3,7,9] },
+  { name: '7sus4', pcs: [0,5,7,10] },
+];
+
+// ======== COLOR THEME (Okabe-Ito colorblind-safe) ========
+
+var PAD_THEME_OKABE_ITO = {
+  root:     '#E69F00',
+  bass:     '#ff9800',
+  guide3:   '#009E73',
+  guide7:   '#CC79A7',
+  tension:  '#56B4E9',
+  chord:    '#56B4E9',
+  inactive: '#2a2a3e',
+  mute:     '#D55E00',
+};
+
 // Conditional exports for Node.js (Vitest) — ignored in browser
 if (typeof module !== 'undefined') module.exports = {
   NOTE_NAMES_SHARP, NOTE_NAMES_FLAT, FLAT_MAJOR_KEYS,
   SCALES, KEY_SPELLINGS,
   BUILDER_QUALITIES, TENSION_ROWS,
-  PC_TO_TENSION_NAME, TENSION_NAME_TO_PC, SCALE_AVAIL_TENSIONS,
+  DEGREE_TO_SEMITONE, PC_TO_TENSION_NAME, TENSION_NAME_TO_PC, SCALE_AVAIL_TENSIONS,
   PAD_ROOT_TO_PC, PAD_QUALITY_INTERVALS, PAD_QUALITY_KEYS, PAD_QUALITY_DISPLAY,
   GRID, GRID_32, SCALE_DEGREE_NAMES,
   PAD_INST_COLORS, PAD_GUITAR_TUNING, PAD_GUITAR_NAMES, PAD_BASS_TUNING, PAD_BASS_NAMES,
+  padBuildChordDetectDB, CHORD_DETECT_DB, TRIAD_DETECT_DB, TETRAD_DETECT_DB,
+  PAD_THEME_OKABE_ITO,
 };

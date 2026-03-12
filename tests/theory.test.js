@@ -122,6 +122,22 @@ describe('padParseChordName', () => {
     expect(r.root).toBe(0);
     expect(r.intervals).toEqual([0, 4, 7, 11]);
   });
+
+  it('parses FmMaj7 (minor-major-7)', () => {
+    const r = padParseChordName('FmMaj7');
+    expect(r).not.toBeNull();
+    expect(r.root).toBe(5);
+    expect(r.intervals).toEqual([0, 3, 7, 11]);
+    expect(r.displayName).toBe('Fm\u25B37');
+  });
+
+  it('parses CmM7 (minor-major-7 short form)', () => {
+    const r = padParseChordName('CmM7');
+    expect(r).not.toBeNull();
+    expect(r.root).toBe(0);
+    expect(r.intervals).toEqual([0, 3, 7, 11]);
+    expect(r.displayName).toBe('Cm\u25B37');
+  });
 });
 
 describe('padPitchClass', () => {
@@ -656,16 +672,17 @@ describe('padEnumGuitarChordForms', () => {
     expect(formsWithout5th.length).toBeGreaterThan(0);
   });
 
-  it('C7 requires 5th (no tensions, not optional)', () => {
-    // C7 = [0, 4, 7, 10], no interval >= 13 → all PCs required
+  it('C7 allows omitting 5th (7th present = R37 shell is standard)', () => {
+    // C7 = [0, 4, 7, 10], has 7th → 5th is optional (R-3-7 shell voicing)
     const forms = padEnumGuitarChordForms([0, 4, 7, 10], 0, GUITAR, 21, 4);
-    for (const f of forms) {
+    const formsWithout5th = forms.filter(f => {
       const pcs = new Set();
       for (let s = 0; s < GUITAR.length; s++) {
         if (f.frets[s] !== null) pcs.add((GUITAR[s] + f.frets[s]) % 12);
       }
-      expect(pcs.has(7)).toBe(true); // G must be present
-    }
+      return !pcs.has(7); // G = pitch class 7
+    });
+    expect(formsWithout5th.length).toBeGreaterThan(0);
   });
 
   it('triads still require all notes', () => {
@@ -800,5 +817,302 @@ describe('padEnumGuitarChordForms', () => {
       return !pcs.has(7);
     });
     expect(without5th.length).toBeGreaterThan(0);
+  });
+});
+
+// ======== padDetectChord ========
+describe('padDetectChord', () => {
+  function hasMatch(results, pattern) {
+    return results.some(r => r.name === pattern || r.name.startsWith(pattern));
+  }
+
+  describe('triads', () => {
+    it('C major [60,64,67]', () => {
+      expect(padDetectChord([60, 64, 67])[0].name).toBe('CMaj');
+    });
+    it('C minor [60,63,67]', () => {
+      expect(padDetectChord([60, 63, 67])[0].name).toBe('Cm');
+    });
+    it('C dim [60,63,66]', () => {
+      expect(padDetectChord([60, 63, 66])[0].name).toBe('Cdim');
+    });
+    it('C aug [60,64,68]', () => {
+      expect(padDetectChord([60, 64, 68])[0].name).toBe('Caug');
+    });
+    it('C sus4 [60,65,67]', () => {
+      expect(hasMatch(padDetectChord([60, 65, 67]), 'Csus4')).toBe(true);
+    });
+  });
+
+  describe('tetrads', () => {
+    it('Cm7 [60,63,67,70]', () => {
+      expect(padDetectChord([60, 63, 67, 70])[0].name).toBe('Cm7');
+    });
+    it('C\u25B37 [60,64,67,71]', () => {
+      expect(padDetectChord([60, 64, 67, 71])[0].name).toBe('C\u25B37');
+    });
+    it('C7 [60,64,67,70]', () => {
+      expect(padDetectChord([60, 64, 67, 70])[0].name).toBe('C7');
+    });
+    it('Cdim7 [60,63,66,69]', () => {
+      expect(padDetectChord([60, 63, 66, 69])[0].name).toBe('Cdim7');
+    });
+    it('Cm7(b5) [60,63,66,70]', () => {
+      expect(padDetectChord([60, 63, 66, 70])[0].name).toBe('Cm7(b5)');
+    });
+  });
+
+  describe('tensions', () => {
+    it('C7(9) [60,64,67,70,74]', () => {
+      expect(hasMatch(padDetectChord([60, 64, 67, 70, 74]), 'C7(9)')).toBe(true);
+    });
+    it('C\u25B37(9) [60,64,67,71,74]', () => {
+      expect(hasMatch(padDetectChord([60, 64, 67, 71, 74]), 'C\u25B37(9)')).toBe(true);
+    });
+  });
+
+  describe('inversions', () => {
+    it('E,G,C [64,67,72] \u2192 CMaj / E', () => {
+      expect(hasMatch(padDetectChord([64, 67, 72]), 'CMaj / E')).toBe(true);
+    });
+    it('G,C,E [67,72,76] \u2192 CMaj / G', () => {
+      expect(hasMatch(padDetectChord([67, 72, 76]), 'CMaj / G')).toBe(true);
+    });
+  });
+
+  describe('edge cases', () => {
+    it('single note returns empty', () => {
+      expect(padDetectChord([60])).toEqual([]);
+    });
+    it('same note repeated returns empty', () => {
+      expect(padDetectChord([60, 72])).toEqual([]);
+    });
+    it('empty input returns empty', () => {
+      expect(padDetectChord([])).toEqual([]);
+    });
+    it('returns at most 8 results', () => {
+      expect(padDetectChord([60, 64, 67, 70, 74, 77]).length).toBeLessThanOrEqual(8);
+    });
+  });
+
+  describe('invariants', () => {
+    it('root position scores higher than inversions', () => {
+      var results = padDetectChord([60, 64, 67]);
+      if (results.length > 1) {
+        expect(results[0].score).toBeGreaterThanOrEqual(results[1].score);
+      }
+    });
+    it('all results have name, rootPC, score', () => {
+      padDetectChord([60, 64, 67, 70]).forEach(function(r) {
+        expect(r).toHaveProperty('name');
+        expect(r).toHaveProperty('rootPC');
+        expect(r).toHaveProperty('score');
+      });
+    });
+  });
+});
+
+// ======== padParseStockVoicings ========
+describe('padParseStockVoicings', () => {
+  const SAMPLE_JSON = {
+    _meta: { version: '1.0.0' },
+    major: {
+      Maj7: [
+        { id: 'maj7-1', name: 'Maj7(9)', label: 'Basic', LH: ['1','5'], RH: ['3','7','9'] },
+        { id: 'maj7-2', name: 'Maj7(#11)', label: '#11', LH: ['1','3'], RH: ['7','9','#11'] },
+      ]
+    },
+    minor: {
+      Min7: [
+        { id: 'min7-1', name: 'Min7(9)', label: 'Basic', LH: ['1','b7'], RH: ['b3','b7','9'] },
+      ]
+    },
+    diminished: {
+      Dim7: [
+        { id: 'dim-note', name: 'Dim7', label: 'No tensions', LH: [], RH: [] },
+      ]
+    }
+  };
+
+  it('parses into flat entry array', () => {
+    const entries = padParseStockVoicings(SAMPLE_JSON);
+    expect(entries.length).toBe(3); // dim-note skipped (empty LH+RH)
+  });
+
+  it('skips _meta key', () => {
+    const entries = padParseStockVoicings(SAMPLE_JSON);
+    expect(entries.some(e => e.category === '_meta')).toBe(false);
+  });
+
+  it('skips entries with empty LH and RH', () => {
+    const entries = padParseStockVoicings(SAMPLE_JSON);
+    expect(entries.some(e => e.id === 'dim-note')).toBe(false);
+  });
+
+  it('converts degree strings to semitones', () => {
+    const entries = padParseStockVoicings(SAMPLE_JSON);
+    const maj7 = entries.find(e => e.id === 'maj7-1');
+    expect(maj7.lhSemitones).toEqual([0, 7]);      // 1=0, 5=7
+    expect(maj7.rhSemitones).toEqual([4, 11, 2]);   // 3=4, 7=11, 9=2
+  });
+
+  it('computes unique allSemitones', () => {
+    const entries = padParseStockVoicings(SAMPLE_JSON);
+    const min7 = entries.find(e => e.id === 'min7-1');
+    // LH:[1,b7]=[0,10], RH:[b3,b7,9]=[3,10,2] → unique: [0,10,3,2]
+    expect(min7.allSemitones).toEqual([0, 10, 3, 2]);
+    expect(min7.pcCount).toBe(4); // b7 appears in both LH and RH
+  });
+
+  it('preserves category and subtype', () => {
+    const entries = padParseStockVoicings(SAMPLE_JSON);
+    const maj7 = entries.find(e => e.id === 'maj7-1');
+    expect(maj7.category).toBe('major');
+    expect(maj7.subtype).toBe('Maj7');
+  });
+});
+
+// ======== padMatchStockVoicing ========
+describe('padMatchStockVoicing', () => {
+  // Pre-parsed stock entries for testing
+  const STOCK = [
+    { id: 'maj7-1', name: 'Maj7(9)', label: 'Basic', category: 'major', subtype: 'Maj7',
+      lhSemitones: [0, 7], rhSemitones: [4, 11, 2], allSemitones: [0, 7, 4, 11, 2], pcCount: 5 },
+    { id: 'min7-1', name: 'Min7(9)', label: 'Basic', category: 'minor', subtype: 'Min7',
+      lhSemitones: [0, 10], rhSemitones: [3, 10, 2], allSemitones: [0, 10, 3, 2], pcCount: 4 },
+    { id: 'dom7-2', name: 'C7(9)', label: 'Natural 9', category: 'dominant', subtype: 'Dom7',
+      lhSemitones: [0, 10], rhSemitones: [4, 10, 2], allSemitones: [0, 10, 4, 2], pcCount: 4 },
+  ];
+
+  it('exact match returns score 1.0', () => {
+    // Cmaj7(9): C=60, G=67, E=64, B=71, D=74 → intervals [0,7,4,11,2]
+    const results = padMatchStockVoicing(0, [60, 67, 64, 71, 74], STOCK);
+    expect(results[0].id).toBe('maj7-1');
+    expect(results[0].score).toBe(1.0);
+  });
+
+  it('partial match scores below 1.0', () => {
+    // Cmaj7 without 9: C=60, G=67, E=64, B=71 → intervals [0,7,4,11], missing 2
+    const results = padMatchStockVoicing(0, [60, 67, 64, 71], STOCK);
+    const maj7 = results.find(r => r.id === 'maj7-1');
+    expect(maj7).toBeDefined();
+    expect(maj7.score).toBeLessThan(1.0);
+    expect(maj7.score).toBeGreaterThanOrEqual(0.5);
+  });
+
+  it('transposes correctly (D root = PC 2)', () => {
+    // Dmaj7(9): D=62, A=69, F#=66, C#=73, E=76 → intervals from D: [0,7,4,11,2]
+    const results = padMatchStockVoicing(2, [62, 69, 66, 73, 76], STOCK);
+    expect(results[0].id).toBe('maj7-1');
+    expect(results[0].score).toBe(1.0);
+  });
+
+  it('returns empty for less than 2 notes', () => {
+    expect(padMatchStockVoicing(0, [60], STOCK)).toEqual([]);
+    expect(padMatchStockVoicing(0, [], STOCK)).toEqual([]);
+  });
+
+  it('returns at most 8 results', () => {
+    const results = padMatchStockVoicing(0, [60, 64, 67, 70, 74], STOCK);
+    expect(results.length).toBeLessThanOrEqual(8);
+  });
+
+  it('all results have required fields', () => {
+    const results = padMatchStockVoicing(0, [60, 67, 64, 71, 74], STOCK);
+    for (const r of results) {
+      expect(r).toHaveProperty('id');
+      expect(r).toHaveProperty('name');
+      expect(r).toHaveProperty('score');
+      expect(r).toHaveProperty('category');
+      expect(r).toHaveProperty('matched');
+      expect(r).toHaveProperty('total');
+    }
+  });
+
+  it('Cm7(9) matches min7-1 exactly', () => {
+    // Cm7(9): C=60, Bb=70, Eb=63, D=74 → intervals [0,10,3,2]
+    const results = padMatchStockVoicing(0, [60, 70, 63, 74], STOCK);
+    expect(results[0].id).toBe('min7-1');
+    expect(results[0].score).toBe(1.0);
+  });
+
+  it('filters out low-score matches (< 0.5)', () => {
+    // C and G only → intervals [0,7], very partial match
+    const results = padMatchStockVoicing(0, [60, 67], STOCK);
+    for (const r of results) {
+      expect(r.score).toBeGreaterThanOrEqual(0.5);
+    }
+  });
+});
+
+// ======== padClassifyPC ========
+describe('padClassifyPC', () => {
+  const active = new Set([0, 4, 7, 10]); // C E G Bb (C7)
+  const g3 = new Set([4]);  // 3rd
+  const g7 = new Set([10]); // b7
+
+  it('classifies root', () => {
+    expect(padClassifyPC(0, 0, null, active, g3, g7)).toBe('root');
+  });
+
+  it('classifies bass (different from root)', () => {
+    expect(padClassifyPC(4, 0, 4, active, g3, g7)).toBe('bass');
+  });
+
+  it('classifies guide3', () => {
+    expect(padClassifyPC(4, 0, null, active, g3, g7)).toBe('guide3');
+  });
+
+  it('classifies guide7', () => {
+    expect(padClassifyPC(10, 0, null, active, g3, g7)).toBe('guide7');
+  });
+
+  it('classifies tension (active but not root/guide)', () => {
+    expect(padClassifyPC(7, 0, null, active, g3, g7)).toBe('tension');
+  });
+
+  it('classifies inactive', () => {
+    expect(padClassifyPC(1, 0, null, active, g3, g7)).toBe('inactive');
+  });
+
+  it('root takes priority over bass when same PC', () => {
+    expect(padClassifyPC(0, 0, 0, active, g3, g7)).toBe('root');
+  });
+
+  it('handles null/undefined bassPC', () => {
+    expect(padClassifyPC(4, 0, undefined, active, g3, g7)).toBe('guide3');
+  });
+
+  it('handles empty activePCS', () => {
+    expect(padClassifyPC(0, 0, null, new Set(), g3, g7)).toBe('inactive');
+  });
+
+  it('handles null activePCS', () => {
+    expect(padClassifyPC(0, 0, null, null, g3, g7)).toBe('inactive');
+  });
+});
+
+// ======== padClassifyColor ========
+describe('padClassifyColor', () => {
+  it('returns root color for root classification', () => {
+    expect(padClassifyColor('root')).toBe('#E69F00');
+  });
+
+  it('returns guide3 color', () => {
+    expect(padClassifyColor('guide3')).toBe('#009E73');
+  });
+
+  it('returns inactive for unknown classification', () => {
+    expect(padClassifyColor('inactive')).toBe('#2a2a3e');
+  });
+
+  it('uses custom theme', () => {
+    const custom = { root: '#ff0000', inactive: '#000' };
+    expect(padClassifyColor('root', custom)).toBe('#ff0000');
+  });
+
+  it('falls back to inactive for missing key in custom theme', () => {
+    const custom = { inactive: '#000' };
+    expect(padClassifyColor('guide3', custom)).toBe('#000');
   });
 });
