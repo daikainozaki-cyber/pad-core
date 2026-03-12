@@ -345,6 +345,39 @@ const GRID_32 = {
 
 const SCALE_DEGREE_NAMES = ['R','b2','2','b3','3','4','b5','5','b6','6','b7','7'];
 
+// Instrument diagram color palette (Okabe-Ito colorblind-safe)
+const PAD_INST_COLORS = {
+  root: '#E69F00',          // amber (matches --pad-root)
+  rootText: '#000',
+  bass: '#ff9800',          // orange (matches pad bass)
+  bassText: '#000',
+  guide3: '#CC79A7',        // pink (matches --pad-guide3)
+  guide7: '#009E73',        // green (matches --pad-guide7)
+  tension: '#0072B2',       // blue (matches --pad-tension)
+  avoid: '#D55E00',         // red-orange (matches --pad-avoid)
+  omitted: '#555',          // dim gray (matches --pad-omitted)
+  chord: '#56B4E9',         // sky blue (matches --pad-chord)
+  overlay: '#56B4E9',       // sky blue (scale overlay)
+  overlayChar: '#F0E442',   // yellow (characteristic note overlay)
+  overlayText: '#aaa',
+  padRange: '#56B4E9',      // pad range highlight
+  mute: '#D55E00',          // mute X mark
+  // Piano-specific (white/black key color variants)
+  pianoChordWhite: '#90CAF9',     // active chord tone on white key
+  pianoChordBlack: '#4A90D9',     // active chord tone on black key
+  pianoOverlayWhite: '#b8d8ec',   // overlay on white key
+  pianoOverlayCharWhite: '#e8dfa0', // overlay char on white key
+  charNote: '#F0E442',            // characteristic note (scale mode)
+};
+
+// Standard guitar tuning (high to low): E4, B3, G3, D3, A2, E2
+const PAD_GUITAR_TUNING = [64, 59, 55, 50, 45, 40];
+const PAD_GUITAR_NAMES  = ['E', 'B', 'G', 'D', 'A', 'E'];
+
+// Standard bass tuning (high to low): G2, D2, A1, E1
+const PAD_BASS_TUNING = [43, 38, 33, 28];
+const PAD_BASS_NAMES  = ['G', 'D', 'A', 'E'];
+
 // Conditional exports for Node.js (Vitest) — ignored in browser
 if (typeof module !== 'undefined') module.exports = {
   NOTE_NAMES_SHARP, NOTE_NAMES_FLAT, FLAT_MAJOR_KEYS,
@@ -353,4 +386,5 @@ if (typeof module !== 'undefined') module.exports = {
   PC_TO_TENSION_NAME, TENSION_NAME_TO_PC, SCALE_AVAIL_TENSIONS,
   PAD_ROOT_TO_PC, PAD_QUALITY_INTERVALS, PAD_QUALITY_KEYS, PAD_QUALITY_DISPLAY,
   GRID, GRID_32, SCALE_DEGREE_NAMES,
+  PAD_INST_COLORS, PAD_GUITAR_TUNING, PAD_GUITAR_NAMES, PAD_BASS_TUNING, PAD_BASS_NAMES,
 };
