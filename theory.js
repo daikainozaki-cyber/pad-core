@@ -808,10 +808,28 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       }
       var fingerUnits = 0;
       for (var fret in fretGroups) {
+        var strs = fretGroups[fret].slice().sort(function(a, b) { return a - b; });
         if (parseInt(fret) === minFrettedFret) {
-          fingerUnits += 1; // barre candidate: 1 unit
+          // Barre candidate: valid only if no string between endpoints
+          // has a note at a LOWER fret (which would break the barre).
+          // Also: single string = 1 unit (no barre needed).
+          if (strs.length === 1) {
+            fingerUnits += 1;
+          } else {
+            var barreBroken = false;
+            for (var si = strs[0] + 1; si < strs[strs.length - 1]; si++) {
+              if (chosen[si] !== null && chosen[si] > 0 && chosen[si] < minFrettedFret) {
+                barreBroken = true; break;
+              }
+            }
+            if (barreBroken) {
+              // Can't barre: count each string as separate unit
+              fingerUnits += strs.length;
+            } else {
+              fingerUnits += 1; // valid barre: 1 unit
+            }
+          }
         } else {
-          var strs = fretGroups[fret].slice().sort(function(a, b) { return a - b; });
           var groups = 1;
           for (var i = 1; i < strs.length; i++) {
             if (strs[i] !== strs[i - 1] + 1) groups++;
