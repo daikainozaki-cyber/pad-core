@@ -921,6 +921,16 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
 
   search(0, Infinity, 0, 0);
 
+  // add9/sus2 genre bonus: these chords are genre-signaling.
+  // Open-string voicings (Police/British) and upper-string partials (R&B/gospel)
+  // should rank higher than generic barre shapes.
+  var isAdd9Type = hasTensions && !has7or6;  // 9th present but no 7th = add chord
+  var isSus2 = false;
+  for (var i = 0; i < chordPCS.length; i++) {
+    if (chordPCS[i] === 2 && !has3 && !has4) isSus2 = true;
+  }
+  var addSusBoost = isAdd9Type || isSus2;
+
   // Sort by weighted score (higher = better)
   // Balances string count against fret position so open chords rank well
   function sortScore(r) {
@@ -989,6 +999,20 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
     var fullFretBonus = 0;
     if (openCount === 0) fullFretBonus = wFullFret;
 
+    // add9/sus2 genre boost: open-string voicings (Police) and
+    // upper-string partials (R&B/gospel) are the standard approaches.
+    var addSusOpenBonus = 0, addSusTop3Bonus = 0;
+    if (addSusBoost) {
+      // Boost open-string voicings (British/Police: arpeggiated open add9)
+      if (openCount >= 1 && avgFret <= 3) addSusOpenBonus = 60;
+      // Boost upper-string partials: only strings 1-3 (R&B/gospel: partial voicing)
+      if (numStrings === 6 && r.frets[3] === null && r.frets[4] === null && r.frets[5] === null) {
+        var top3count = 0;
+        for (var i = 0; i < 3; i++) { if (r.frets[i] !== null) top3count++; }
+        if (top3count >= 3) addSusTop3Bonus = 50;
+      }
+    }
+
     return (r.rootInBass ? wRootBass : 0)
       + fifthBassBonus
       + rootStrBonus
@@ -996,6 +1020,8 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       + guideToneBonus
       + openBonus
       + fullFretBonus
+      + addSusOpenBonus
+      + addSusTop3Bonus
       + r.stringCount * wStringCount
       - avgFret * wAvgFret
       - r.span * wSpan
