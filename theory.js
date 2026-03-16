@@ -689,7 +689,7 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
   var wRootStr4   = W.rootStr4   !== undefined ? W.rootStr4   : 20;
   var wTop4       = W.top4       !== undefined ? W.top4       : 30;
   var wGuideTone  = W.guideTone  !== undefined ? W.guideTone  : 40;
-  var wOpenStr    = W.openStr    !== undefined ? W.openStr    : 15;
+  var wOpenStr    = W.openStr    !== undefined ? W.openStr    : 30;
   var wStringCount= W.stringCount!== undefined ? W.stringCount: 30;
   var wAvgFret    = W.avgFret    !== undefined ? W.avgFret    : 15;
   var wSpan       = W.span       !== undefined ? W.span       : 10;
@@ -1006,8 +1006,9 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
         if (r.frets[i] === 0) openCount++;
       }
       if (openCount > 0) {
-        // factor: 1.0 at avgFret=0, 0.0 at avgFret=2.5, negative above
-        var openFactor = 1 - (avgFret / 2.5);
+        // factor: 1.0 at avgFret=0, 0.5 at avgFret=3, 0.0 at avgFret=5, negative above
+        // Standard open chords (C, Am, G, D) have avgFret 1-3 → strong bonus
+        var openFactor = 1 - (avgFret / 5);
         openBonus = openCount * wOpenStr * openFactor;
       }
     }
