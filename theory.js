@@ -839,6 +839,45 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       }
       if (fingerUnits > 4) return;
 
+      // Broken barre check for ALL fret groups (not just minFrettedFret):
+      // Same fret on distant strings with different frets between = can't barre
+      for (var fret in fretGroups) {
+        if (parseInt(fret) === minFrettedFret) continue; // already checked above
+        var strs2 = fretGroups[fret];
+        if (strs2.length < 2) continue;
+        strs2 = strs2.slice().sort(function(a,b){return a-b;});
+        for (var si = strs2[0]+1; si < strs2[strs2.length-1]; si++) {
+          if (chosen[si] !== null && chosen[si] !== parseInt(fret) && chosen[si] !== 0) {
+            // String between has a different fret → can't barre this fret
+            // Recount: each string needs its own finger
+            fingerUnits += strs2.length - 1; // was counted as fewer groups
+            if (fingerUnits > 4) return;
+            break;
+          }
+        }
+      }
+
+      // Finger reach check: index (lowest fret) and pinky (highest fret)
+      // must not be too far apart in BOTH fret and string dimensions.
+      // Fret span is already checked (maxSpan=4). But if the highest fret
+      // note is on a distant string from the lowest, the hand can't reach.
+      if (minFrettedFret < Infinity) {
+        var maxFret = 0, maxFretStr = -1, minFretStr = -1;
+        for (var i = 0; i < numStrings; i++) {
+          if (chosen[i] !== null && chosen[i] > 0) {
+            if (chosen[i] === minFrettedFret && minFretStr === -1) minFretStr = i;
+            if (chosen[i] > maxFret) { maxFret = chosen[i]; maxFretStr = i; }
+          }
+        }
+        if (minFretStr !== -1 && maxFretStr !== -1) {
+          var fretDiff = maxFret - minFrettedFret;
+          var strDist = Math.abs(maxFretStr - minFretStr);
+          // fretDiff 3+ across 4+ strings = physically very difficult
+          // (pinky and index too far apart in both dimensions)
+          if (fretDiff >= 3 && strDist >= 4) return;
+        }
+      }
+
       // Above-barre spread check: notes above the barre must be within a
       // reasonable window. Relaxed when fret difference is small (1-2 frets)
       // because fingers can reach across the neck at adjacent frets easily
