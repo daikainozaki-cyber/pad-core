@@ -710,14 +710,16 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
     if (iv === 6 || iv === 8) hasAltered5th = true;
   }
   var alteredFifthIsChordTone = hasAltered5th && !hasNatural5th;
-  // Fifth is optional when: tensions (9th+), 7th/6th present (R37 shell is standard),
+  // Fifth is optional when: 7th/6th present (R37 shell voicing is standard),
   // or fifthOptional option. Guitar has 4 fingers = 5th is first to drop.
+  // NOTE: tensions alone (e.g. add9 = triad+9) do NOT make 5th optional.
+  // add9's 5th is part of the triad foundation — only omit when 7th provides the shell.
   var has7or6 = false;
   for (var i = 0; i < chordPCS.length; i++) {
     var iv = chordPCS[i] % 12;
     if (iv === 9 || iv === 10 || iv === 11) has7or6 = true;
   }
-  var fifthIsOptional = (hasTensions || has7or6 || !!options.fifthOptional) && !alteredFifthIsChordTone;
+  var fifthIsOptional = (has7or6 || !!options.fifthOptional) && !alteredFifthIsChordTone;
 
   // Compute absolute pitch class set
   var chordAbsPCS = {};
