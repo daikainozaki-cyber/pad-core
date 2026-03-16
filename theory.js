@@ -780,13 +780,16 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       if (isRootless && !allowRootless) return;
       // Filter: must have 3rd if chord defines one
       if (hasThirdInChord && !notePCs[third3PC] && !notePCs[third4PC]) return;
-      // Filter: non-tension chords require all pitch classes present
-      // Tension chords (9th+) allow 5th omission for playability
-      if (!fifthIsOptional) {
-        for (var pc in chordAbsPCS) {
-          if (isRootless && parseInt(pc) === rootPC) continue;
-          if (!notePCs[pc]) return;
-        }
+      // Filter: all pitch classes must be present, except:
+      // - root (when rootless allowed)
+      // - natural 5th (when fifthIsOptional — tension chords, 7th chords, etc.)
+      // Tension notes themselves are NEVER optional.
+      var fifthPC = (rootPC + 7) % 12;
+      for (var pc in chordAbsPCS) {
+        var p = parseInt(pc);
+        if (isRootless && p === rootPC) continue;
+        if (fifthIsOptional && p === fifthPC) continue;
+        if (!notePCs[pc]) return;
       }
 
       // Finger unit feasibility: max 4 fingers available
