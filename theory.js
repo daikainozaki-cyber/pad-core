@@ -680,6 +680,20 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
   var allowRootless = !!options.allowRootless;
   var noOpen = !!options.noOpen; // funk/soul: no open strings (can't mute for tight rhythm)
 
+  // Reference voicing lookup: known-good voicings from curated sources (JGuitar etc.)
+  // Build fret-string → rank lookup for this chord
+  var refLookup = null;
+  if (typeof GUITAR_REF_VOICINGS !== 'undefined') {
+    var pcsKey = rootPC + ':' + chordPCS.slice().sort(function(a,b){return a-b;}).join(',');
+    var refList = GUITAR_REF_VOICINGS[pcsKey];
+    if (refList) {
+      refLookup = {};
+      for (var ri = 0; ri < refList.length; ri++) {
+        refLookup[refList[ri]] = ri; // rank 0 = highest priority
+      }
+    }
+  }
+
   // Scoring weights: override via options.weights for genre presets (bossa/jazz/funk)
   var W = options.weights || {};
   var wRootBass   = W.rootBass   !== undefined ? W.rootBass   : 120;
@@ -840,17 +854,16 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       if (fingerUnits > 4) return;
 
       // Broken barre check for ALL fret groups (not just minFrettedFret):
-      // Same fret on distant strings with different frets between = can't barre
+      // Same fret on 3+ distant strings with different frets between = can't barre
+      // (2 strings at same fret can use separate fingers, so only flag 3+)
       for (var fret in fretGroups) {
         if (parseInt(fret) === minFrettedFret) continue; // already checked above
         var strs2 = fretGroups[fret];
-        if (strs2.length < 2) continue;
+        if (strs2.length < 3) continue; // 2 strings = separate fingers OK
         strs2 = strs2.slice().sort(function(a,b){return a-b;});
         for (var si = strs2[0]+1; si < strs2[strs2.length-1]; si++) {
           if (chosen[si] !== null && chosen[si] !== parseInt(fret) && chosen[si] !== 0) {
-            // String between has a different fret → can't barre this fret
-            // Recount: each string needs its own finger
-            fingerUnits += strs2.length - 1; // was counted as fewer groups
+            fingerUnits += strs2.length - 1;
             if (fingerUnits > 4) return;
             break;
           }
@@ -1071,6 +1084,21 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       }
     }
 
+    // Reference voicing bonus: match against curated known-good voicings
+    var refBonus = 0;
+    if (refLookup) {
+      var fretKey = '';
+      for (var ri = numStrings - 1; ri >= 0; ri--) {
+        fretKey += (r.frets[ri] === null ? 'x' : r.frets[ri]);
+        if (ri > 0) fretKey += ',';
+      }
+      if (refLookup[fretKey] !== undefined) {
+        // Rank 0 (definitive form) = 500 bonus. Others = 150 - rank*30.
+        var rank = refLookup[fretKey];
+        refBonus = rank === 0 ? 500 : Math.max(0, 150 - rank * 30);
+      }
+    }
+
     return (r.rootInBass ? wRootBass : 0)
       + fifthBassBonus
       + rootStrBonus
@@ -1080,6 +1108,7 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       + fullFretBonus
       + addSusOpenBonus
       + addSusTop3Bonus
+      + refBonus
       + r.stringCount * wStringCount
       - avgFret * wAvgFret
       - r.span * wSpan
