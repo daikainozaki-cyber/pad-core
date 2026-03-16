@@ -1047,6 +1047,31 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
     return sortScore(b) - sortScore(a);
   });
 
+  // add9/sus2: pin #1 = best open-string voicing, #2 = best 6th-string-root.
+  // These two are the standard approaches (Police open vs barre).
+  if (addSusBoost && results.length >= 2 && numStrings === 6) {
+    var bestOpen = -1, bestStr6Root = -1;
+    for (var i = 0; i < results.length; i++) {
+      var r = results[i];
+      if (bestOpen === -1) {
+        for (var s = 0; s < 6; s++) { if (r.frets[s] === 0) { bestOpen = i; break; } }
+      }
+      if (bestStr6Root === -1 && r.rootInBass && r.bassString === 5) {
+        bestStr6Root = i;
+      }
+      if (bestOpen !== -1 && bestStr6Root !== -1) break;
+    }
+    // Move to front: open → #0, 6th-root → #1 (splice order matters)
+    var pinned = [];
+    if (bestOpen !== -1) pinned.push(results.splice(bestOpen, 1)[0]);
+    if (bestStr6Root !== -1) {
+      // Adjust index if open was before str6root
+      var adj = (bestOpen !== -1 && bestOpen < bestStr6Root) ? bestStr6Root - 1 : bestStr6Root;
+      pinned.push(results.splice(adj, 1)[0]);
+    }
+    results = pinned.concat(results);
+  }
+
   return results.slice(0, maxResults);
 }
 
