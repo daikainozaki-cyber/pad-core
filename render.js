@@ -1258,10 +1258,8 @@ function padComputeRenderState(opts) {
   var tastyTopMidi = null;
   if (mode === 'chord' && tasty.enabled && tasty.midiNotes && tasty.midiNotes.length > 0) {
     tastyDegreeMap = tasty.degreeMap || {};
-    if (tasty.boxSelected) {
-      tastyMidiSet = new Set(tasty.midiNotes);
-      tastyTopMidi = tasty.topNote;
-    }
+    tastyMidiSet = new Set(tasty.midiNotes);
+    tastyTopMidi = tasty.topNote;
     activePCS = new Set(tasty.midiNotes.map(function(m) { return m % 12; }));
     guide3PCS = new Set(); guide7PCS = new Set(); tensionPCS = new Set();
     omittedPCS = new Set();
@@ -1273,6 +1271,26 @@ function padComputeRenderState(opts) {
       if (td === '3' || td === 'b3') guide3PCS.add(tpc);
       else if (td === '7' || td === 'b7' || td === '6') guide7PCS.add(tpc);
       else if (td !== '1' && td !== '5' && td !== 'b5' && td !== '#5') tensionPCS.add(tpc);
+    }
+  }
+
+  // Stock voicing override (same rendering as TASTY — mutually exclusive)
+  var stock = opts.stock || {};
+  if (mode === 'chord' && !tastyMidiSet && stock.enabled && stock.midiNotes && stock.midiNotes.length > 0) {
+    tastyDegreeMap = stock.degreeMap || {};
+    tastyMidiSet = new Set(stock.midiNotes);
+    tastyTopMidi = stock.topNote;
+    activePCS = new Set(stock.midiNotes.map(function(m) { return m % 12; }));
+    guide3PCS = new Set(); guide7PCS = new Set(); tensionPCS = new Set();
+    omittedPCS = new Set();
+    for (var si = 0; si < stock.midiNotes.length; si++) {
+      var sm = stock.midiNotes[si];
+      var sd = tastyDegreeMap[sm];
+      var spc = sm % 12;
+      if (!sd) continue;
+      if (sd === '3' || sd === 'b3') guide3PCS.add(spc);
+      else if (sd === '7' || sd === 'b7' || sd === '6') guide7PCS.add(spc);
+      else if (sd !== '1' && sd !== '5' && sd !== 'b5' && sd !== '#5') tensionPCS.add(spc);
     }
   }
 

@@ -715,7 +715,7 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
   var wRootStr4   = W.rootStr4   !== undefined ? W.rootStr4   : 20;
   var wTop4       = W.top4       !== undefined ? W.top4       : 30;
   var wGuideTone  = W.guideTone  !== undefined ? W.guideTone  : 40;
-  var wOpenStr    = W.openStr    !== undefined ? W.openStr    : 15;
+  var wOpenStr    = W.openStr    !== undefined ? W.openStr    : 30;
   var wStringCount= W.stringCount!== undefined ? W.stringCount: 30;
   var wAvgFret    = W.avgFret    !== undefined ? W.avgFret    : 12;
   var wSpan       = W.span       !== undefined ? W.span       : 10;
@@ -736,14 +736,16 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
     if (iv === 6 || iv === 8) hasAltered5th = true;
   }
   var alteredFifthIsChordTone = hasAltered5th && !hasNatural5th;
-  // Fifth is optional when: tensions (9th+), 7th/6th present (R37 shell is standard),
+  // Fifth is optional when: 7th/6th present (R37 shell voicing is standard),
   // or fifthOptional option. Guitar has 4 fingers = 5th is first to drop.
+  // NOTE: tensions alone (e.g. add9 = triad+9) do NOT make 5th optional.
+  // add9's 5th is part of the triad foundation — only omit when 7th provides the shell.
   var has7or6 = false;
   for (var i = 0; i < chordPCS.length; i++) {
     var iv = chordPCS[i] % 12;
     if (iv === 9 || iv === 10 || iv === 11) has7or6 = true;
   }
-  var fifthIsOptional = (hasTensions || has7or6 || !!options.fifthOptional) && !alteredFifthIsChordTone;
+  var fifthIsOptional = (has7or6 || !!options.fifthOptional) && !alteredFifthIsChordTone;
 
   // Compute absolute pitch class set
   var chordAbsPCS = {};
@@ -811,13 +813,16 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       if (isRootless && !allowRootless) return;
       // Filter: must have 3rd if chord defines one
       if (hasThirdInChord && !notePCs[third3PC] && !notePCs[third4PC]) return;
-      // Filter: non-tension chords require all pitch classes present
-      // Tension chords (9th+) allow 5th omission for playability
-      if (!fifthIsOptional) {
-        for (var pc in chordAbsPCS) {
-          if (isRootless && parseInt(pc) === rootPC) continue;
-          if (!notePCs[pc]) return;
-        }
+      // Filter: all pitch classes must be present, except:
+      // - root (when rootless allowed)
+      // - natural 5th (when fifthIsOptional — tension chords, 7th chords, etc.)
+      // Tension notes themselves are NEVER optional.
+      var fifthPC = (rootPC + 7) % 12;
+      for (var pc in chordAbsPCS) {
+        var p = parseInt(pc);
+        if (isRootless && p === rootPC) continue;
+        if (fifthIsOptional && p === fifthPC) continue;
+        if (!notePCs[pc]) return;
       }
 
       // Finger unit feasibility: max 4 fingers available
@@ -881,6 +886,44 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
         }
       }
       if (fingerUnits > 4) return;
+
+      // Broken barre check for ALL fret groups (not just minFrettedFret):
+      // Same fret on 3+ distant strings with different frets between = can't barre
+      // (2 strings at same fret can use separate fingers, so only flag 3+)
+      for (var fret in fretGroups) {
+        if (parseInt(fret) === minFrettedFret) continue; // already checked above
+        var strs2 = fretGroups[fret];
+        if (strs2.length < 3) continue; // 2 strings = separate fingers OK
+        strs2 = strs2.slice().sort(function(a,b){return a-b;});
+        for (var si = strs2[0]+1; si < strs2[strs2.length-1]; si++) {
+          if (chosen[si] !== null && chosen[si] !== parseInt(fret) && chosen[si] !== 0) {
+            fingerUnits += strs2.length - 1;
+            if (fingerUnits > 4) return;
+            break;
+          }
+        }
+      }
+
+      // Finger reach check: index (lowest fret) and pinky (highest fret)
+      // must not be too far apart in BOTH fret and string dimensions.
+      // Fret span is already checked (maxSpan=4). But if the highest fret
+      // note is on a distant string from the lowest, the hand can't reach.
+      if (minFrettedFret < Infinity) {
+        var maxFret = 0, maxFretStr = -1, minFretStr = -1;
+        for (var i = 0; i < numStrings; i++) {
+          if (chosen[i] !== null && chosen[i] > 0) {
+            if (chosen[i] === minFrettedFret && minFretStr === -1) minFretStr = i;
+            if (chosen[i] > maxFret) { maxFret = chosen[i]; maxFretStr = i; }
+          }
+        }
+        if (minFretStr !== -1 && maxFretStr !== -1) {
+          var fretDiff = maxFret - minFrettedFret;
+          var strDist = Math.abs(maxFretStr - minFretStr);
+          // fretDiff 3+ across 4+ strings = physically very difficult
+          // (pinky and index too far apart in both dimensions)
+          if (fretDiff >= 3 && strDist >= 4) return;
+        }
+      }
 
       // Above-barre spread check: notes above the barre must be within a
       // reasonable window. Relaxed when fret difference is small (1-2 frets)
@@ -986,6 +1029,16 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
 
   search(0, Infinity, 0, 0);
 
+  // add9/sus2 genre bonus: these chords are genre-signaling.
+  // Open-string voicings (Police/British) and upper-string partials (R&B/gospel)
+  // should rank higher than generic barre shapes.
+  var isAdd9Type = hasTensions && !has7or6;  // 9th present but no 7th = add chord
+  var isSus2 = false;
+  for (var i = 0; i < chordPCS.length; i++) {
+    if (chordPCS[i] === 2 && !has3 && !has4) isSus2 = true;
+  }
+  var addSusBoost = isAdd9Type || isSus2;
+
   // Sort by weighted score (higher = better)
   // Balances string count against fret position so open chords rank well
   function sortScore(r) {
@@ -1045,8 +1098,9 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
         if (r.frets[i] !== null && r.frets[i] > maxFret) maxFret = r.frets[i];
       }
       if (openCount > 0) {
-        // factor: 1.0 at avgFret=0, 0.0 at avgFret=2.5, negative above
-        var openFactor = 1 - (avgFret / 2.5);
+        // factor: 1.0 at avgFret=0, 0.5 at avgFret=3, 0.0 at avgFret=5, negative above
+        // Standard open chords (C, Am, G, D) have avgFret 1-3 → strong bonus
+        var openFactor = 1 - (avgFret / 5);
         openBonus = openCount * wOpenStr * openFactor;
       }
     }
@@ -1055,6 +1109,20 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
     // Rewards standard barre shapes over open-string variants at same position.
     var fullFretBonus = 0;
     if (openCount === 0) fullFretBonus = wFullFret;
+
+    // add9/sus2 genre boost: open-string voicings (Police) and
+    // upper-string partials (R&B/gospel) are the standard approaches.
+    var addSusOpenBonus = 0, addSusTop3Bonus = 0;
+    if (addSusBoost) {
+      // Boost open-string voicings (British/Police: arpeggiated open add9)
+      if (openCount >= 1 && avgFret <= 3) addSusOpenBonus = 60;
+      // Boost upper-string partials: only strings 1-3 (R&B/gospel: partial voicing)
+      if (numStrings === 6 && r.frets[3] === null && r.frets[4] === null && r.frets[5] === null) {
+        var top3count = 0;
+        for (var i = 0; i < 3; i++) { if (r.frets[i] !== null) top3count++; }
+        if (top3count >= 3) addSusTop3Bonus = 50;
+      }
+    }
 
     // Open+high fret stretch penalty: physical distance from nut to fret 4+
     // while keeping a string open is a big stretch. Standard open chords max
@@ -1114,6 +1182,9 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       + guideToneBonus
       + openBonus
       + fullFretBonus
+      + addSusOpenBonus
+      + addSusTop3Bonus
+      + refBonus
       + r.stringCount * wStringCount
       - avgFret * wAvgFret
       - r.span * wSpan
@@ -1123,8 +1194,7 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       - brokenBarrePenalty
       - overcrowdedPenalty
       - thinPenalty
-      - stretchPenalty
-      + refBonus;
+      - stretchPenalty;
   }
 
   if (allowRootless) {
@@ -1144,7 +1214,146 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
     return sortScore(b) - sortScore(a);
   });
 
-  return results.slice(0, maxResults);
+  // add9/sus2: pin #1 = best open-string voicing, #2 = best 6th-string-root.
+  // These two are the standard approaches (Police open vs barre).
+  if (addSusBoost && results.length >= 2 && numStrings === 6) {
+    var bestOpen = -1, bestStr6Root = -1;
+    for (var i = 0; i < results.length; i++) {
+      var r = results[i];
+      if (bestOpen === -1) {
+        for (var s = 0; s < 6; s++) { if (r.frets[s] === 0) { bestOpen = i; break; } }
+      }
+      if (bestStr6Root === -1 && r.rootInBass && r.bassString === 5) {
+        bestStr6Root = i;
+      }
+      if (bestOpen !== -1 && bestStr6Root !== -1) break;
+    }
+    // Move to front: open → #0, 6th-root → #1 (splice order matters)
+    var pinned = [];
+    if (bestOpen !== -1) pinned.push(results.splice(bestOpen, 1)[0]);
+    if (bestStr6Root !== -1) {
+      // Adjust index if open was before str6root
+      var adj = (bestOpen !== -1 && bestOpen < bestStr6Root) ? bestStr6Root - 1 : bestStr6Root;
+      pinned.push(results.splice(adj, 1)[0]);
+    }
+    results = pinned.concat(results);
+  }
+
+  var finalResults = results.slice(0, maxResults);
+  // Enrich results with finger assignments and barre info
+  for (var fi = 0; fi < finalResults.length; fi++) {
+    var fa = padAssignFingers(finalResults[fi].frets);
+    finalResults[fi].fingers = fa.fingers;
+    finalResults[fi].barre = fa.barre;
+  }
+  return finalResults;
+}
+
+// ======== FINGER ASSIGNMENT ========
+// Assigns finger numbers (1-4) to fretted strings based on JGuitar conventions.
+// Input: frets array (null=muted, 0=open, 1+=fretted). Index 0=high E, 5=low E.
+// Returns: {fingers: [null/0/1/2/3/4 per string], barre: {fret, from, to} | null}
+//
+// Rules:
+// - Finger 1 (index) = lowest fretted note. Barre when physically needed.
+// - Barre when: fretted notes > 4 (can't cover with individual fingers)
+//   or 3+ strings at minFret (natural barre position).
+// - Remaining fretted notes get fingers 2, 3, 4 in order of fret ascending.
+// - Same fret: bass-side string (higher index) gets lower finger number.
+
+function padAssignFingers(frets) {
+  var numStrings = frets.length;
+  var fingers = new Array(numStrings);
+  var frettedPositions = [];
+
+  for (var i = 0; i < numStrings; i++) {
+    if (frets[i] === null) {
+      fingers[i] = null;
+    } else if (frets[i] === 0) {
+      fingers[i] = 0;
+    } else {
+      fingers[i] = -1; // placeholder: to be assigned
+      frettedPositions.push({string: i, fret: frets[i]});
+    }
+  }
+
+  if (frettedPositions.length === 0) {
+    return {fingers: fingers, barre: null};
+  }
+
+  // Find minimum fretted fret
+  var minFret = Infinity;
+  for (var i = 0; i < frettedPositions.length; i++) {
+    if (frettedPositions[i].fret < minFret) minFret = frettedPositions[i].fret;
+  }
+
+  // Strings at minimum fret
+  var minFretStrings = [];
+  for (var i = 0; i < frettedPositions.length; i++) {
+    if (frettedPositions[i].fret === minFret) {
+      minFretStrings.push(frettedPositions[i].string);
+    }
+  }
+  minFretStrings.sort(function(a, b) { return a - b; });
+
+  // Determine barre: used when physically needed or when 3+ strings at minFret
+  var barre = null;
+  var useBarre = minFretStrings.length >= 2 &&
+    (frettedPositions.length > 4 || minFretStrings.length >= 3);
+
+  if (useBarre) {
+    var fromStr = minFretStrings[0];
+    var toStr = minFretStrings[minFretStrings.length - 1];
+    // Verify barre geometry: no lower fret between endpoints
+    var valid = true;
+    for (var s = fromStr + 1; s < toStr; s++) {
+      if (frets[s] !== null && frets[s] > 0 && frets[s] < minFret) {
+        valid = false;
+        break;
+      }
+    }
+    if (valid) {
+      barre = {fret: minFret, from: fromStr, to: toStr};
+      for (var i = 0; i < minFretStrings.length; i++) {
+        fingers[minFretStrings[i]] = 1;
+      }
+    }
+  }
+
+  // If no barre, assign finger 1 to the bass-side string at minFret
+  // (index finger naturally sits closer to bass end of the neck)
+  if (!barre) {
+    fingers[minFretStrings[minFretStrings.length - 1]] = 1;
+  }
+
+  // Collect remaining unassigned fretted positions
+  var unassigned = [];
+  for (var i = 0; i < numStrings; i++) {
+    if (frets[i] !== null && frets[i] > 0 && fingers[i] === -1) {
+      unassigned.push({string: i, fret: frets[i]});
+    }
+  }
+
+  // Sort: fret ascending, then string descending (bass side gets lower finger number)
+  unassigned.sort(function(a, b) {
+    if (a.fret !== b.fret) return a.fret - b.fret;
+    return b.string - a.string;
+  });
+
+  // Assign fingers 2, 3, 4
+  var nextFinger = 2;
+  for (var i = 0; i < unassigned.length; i++) {
+    if (nextFinger <= 4) {
+      fingers[unassigned[i].string] = nextFinger;
+      nextFinger++;
+    } else {
+      // Overflow: more fretted notes than fingers available.
+      // Assign finger 4 (pinky shares duty in dense voicings).
+      fingers[unassigned[i].string] = 4;
+    }
+  }
+
+  return {fingers: fingers, barre: barre};
 }
 
 // ======== CHORD DETECTION ========
@@ -1448,7 +1657,7 @@ if (typeof module !== 'undefined') module.exports = {
   padGetShellIntervals, padCalcAllVoicingPositions,
   padChordContextKey, padGetBuilderChordName,
   padGetDiatonicTetrads, padFindParentScales,
-  padEnumGuitarChordForms, padDetectChord,
+  padEnumGuitarChordForms, padAssignFingers, padDetectChord,
   padParseStockVoicings, padMatchStockVoicing,
   padClassifyPC, padClassifyColor,
   DIATONIC_CHORD_DB,
