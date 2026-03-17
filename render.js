@@ -1258,10 +1258,8 @@ function padComputeRenderState(opts) {
   var tastyTopMidi = null;
   if (mode === 'chord' && tasty.enabled && tasty.midiNotes && tasty.midiNotes.length > 0) {
     tastyDegreeMap = tasty.degreeMap || {};
-    if (tasty.boxSelected) {
-      tastyMidiSet = new Set(tasty.midiNotes);
-      tastyTopMidi = tasty.topNote;
-    }
+    tastyMidiSet = new Set(tasty.midiNotes);
+    tastyTopMidi = tasty.topNote;
     activePCS = new Set(tasty.midiNotes.map(function(m) { return m % 12; }));
     guide3PCS = new Set(); guide7PCS = new Set(); tensionPCS = new Set();
     omittedPCS = new Set();
