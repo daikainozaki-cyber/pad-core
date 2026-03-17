@@ -790,8 +790,11 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       }
 
       // Finger unit feasibility: max 4 fingers available
-      // Lowest fret = barre candidate (1 unit even if non-adjacent strings)
-      // Higher frets: each contiguous group of strings = 1 unit
+      // Finger unit feasibility: barre = lowest fret pressed by index finger.
+      // A barre is valid only if the barred strings span contiguously
+      // (no muted or open strings breaking the barre in between).
+      // If the barre is broken, each contiguous group at minFrettedFret
+      // counts as a separate unit (= separate finger).
       var fretGroups = {};
       var minFrettedFret = Infinity;
       for (var i = 0; i < numStrings; i++) {
@@ -802,14 +805,47 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
         }
       }
       var fingerUnits = 0;
+      var isBrokenBarre = false;
       for (var fret in fretGroups) {
-        if (parseInt(fret) === minFrettedFret) {
-          fingerUnits += 1; // barre candidate: 1 unit
+        var strs = fretGroups[fret].slice().sort(function(a, b) { return a - b; });
+        if (parseInt(fret) === minFrettedFret && strs.length >= 2) {
+          // Barre candidate: check if strings are contiguous
+          // (allowing higher-fretted strings in between, but not muted/open)
+          var barreFirst = strs[0], barreLast = strs[strs.length - 1];
+          // Barre valid if no OPEN strings (fret 0) between barre strings.
+          // Muted strings (null) between barre strings are OK — barre finger
+          // rests on the string to mute it. This is standard technique.
+          // Open strings (fret 0) break the barre — can't barre through an
+          // open string that needs to ring freely.
+          var barreValid = true;
+          for (var bi = barreFirst + 1; bi < barreLast; bi++) {
+            if (chosen[bi] === 0) {
+              barreValid = false; // open string breaks barre
+              break;
+            }
+          }
+          if (barreValid) {
+            fingerUnits += 1; // valid barre: 1 unit (even with muted strings)
+            // Still flag as "soft" broken barre for scoring penalty
+            // if there are muted strings in between (less stable)
+            for (var bi = barreFirst + 1; bi < barreLast; bi++) {
+              if (chosen[bi] === null) { isBrokenBarre = true; break; }
+            }
+          } else {
+            // Hard broken barre (open string): count contiguous groups
+            isBrokenBarre = true;
+            var groups = 1;
+            for (var gi = 1; gi < strs.length; gi++) {
+              if (strs[gi] !== strs[gi - 1] + 1) groups++;
+            }
+            fingerUnits += groups;
+          }
+        } else if (parseInt(fret) === minFrettedFret && strs.length === 1) {
+          fingerUnits += 1; // single string at min fret
         } else {
-          var strs = fretGroups[fret].slice().sort(function(a, b) { return a - b; });
           var groups = 1;
-          for (var i = 1; i < strs.length; i++) {
-            if (strs[i] !== strs[i - 1] + 1) groups++;
+          for (var gi = 1; gi < strs.length; gi++) {
+            if (strs[gi] !== strs[gi - 1] + 1) groups++;
           }
           fingerUnits += groups;
         }
@@ -889,6 +925,7 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
         openGaps: openGaps,
         sandwichedOpen: sandwichedOpen,
         fingerUnits: fingerUnits,
+        isBrokenBarre: isBrokenBarre,
       });
       return;
     }
@@ -968,9 +1005,11 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
     // then flips to penalty. Standard barre always beats scattered open+fret.
     var openBonus = 0;
     var openCount = 0;
+    var maxFret = 0;
     if (!noOpen) {
       for (var i = 0; i < r.frets.length; i++) {
         if (r.frets[i] === 0) openCount++;
+        if (r.frets[i] !== null && r.frets[i] > maxFret) maxFret = r.frets[i];
       }
       if (openCount > 0) {
         // factor: 1.0 at avgFret=0, 0.0 at avgFret=2.5, negative above
@@ -984,6 +1023,43 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
     var fullFretBonus = 0;
     if (openCount === 0) fullFretBonus = wFullFret;
 
+    // Open+high fret stretch penalty: physical distance from nut to fret 4+
+    // while keeping a string open is a big stretch. Standard open chords max
+    // at fret 3 (G major). Fret 4+ with open strings = non-standard stretch.
+    // Exception: open string is root or 5th = musically justified (e.g. Am with open A)
+    var stretchPenalty = 0;
+    if (openCount > 0 && maxFret >= 4) {
+      var fifthPC = (rootPC + 7) % 12;
+      var openIsRoot = false, openIsFifth = false;
+      for (var si = 0; si < r.frets.length; si++) {
+        if (r.frets[si] === 0) {
+          var openPC = tuning[si] % 12;
+          if (openPC === rootPC) openIsRoot = true;
+          if (openPC === fifthPC) openIsFifth = true;
+        }
+      }
+      // Reduced penalty when open string is musically justified
+      var stretchFactor = (openIsRoot || openIsFifth) ? 15 : 40;
+      stretchPenalty = (maxFret - 3) * stretchFactor;
+    }
+
+    // Broken barre penalty: barre at minFret has muted/open strings in between.
+    // These forms are physically awkward compared to contiguous barre shapes.
+    var brokenBarrePenalty = r.isBrokenBarre ? 60 : 0;
+
+    // Overcrowded penalty: 6 strings with wide span = fingers can't fit.
+    // Span 4 + 6 strings = borderline (some are standard barre shapes).
+    // Only heavy penalty for span 5+ (truly impossible).
+    var overcrowdedPenalty = 0;
+    if (r.stringCount >= 6 && r.span >= 5) overcrowdedPenalty = 80;
+    else if (r.stringCount >= 6 && r.span >= 4) overcrowdedPenalty = 30;
+    else if (r.stringCount >= 5 && r.span >= 5) overcrowdedPenalty = 50;
+
+    // Thin high-position penalty: 3-string forms at fret 3+ are rarely useful.
+    // Exception: top-4 comping (already has top4Bonus if applicable).
+    var thinPenalty = 0;
+    if (r.stringCount <= 3 && avgFret >= 3) thinPenalty = 30;
+
     return (r.rootInBass ? wRootBass : 0)
       + fifthBassBonus
       + rootStrBonus
@@ -996,7 +1072,11 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       - r.span * wSpan
       - r.gaps * wGaps
       - r.openGaps * 40 // fingerpicking-only: mute between open strings
-      - r.sandwichedOpen * 25; // open string vibration clashes with fretted neighbors
+      - r.sandwichedOpen * 25 // open string vibration clashes with fretted neighbors
+      - brokenBarrePenalty
+      - overcrowdedPenalty
+      - thinPenalty
+      - stretchPenalty;
   }
 
   if (allowRootless) {

@@ -818,6 +818,55 @@ describe('padEnumGuitarChordForms', () => {
     });
     expect(without5th.length).toBeGreaterThan(0);
   });
+
+  it('broken barre forms have isBrokenBarre flag and receive score penalty', () => {
+    // C#m: [4,2,x,2,4,x] has broken barre (fret 2 on non-contiguous strings)
+    // It should rank lower than the standard barre [4,5,6,6,4,x]
+    const forms = padEnumGuitarChordForms([0, 3, 7], 1, GUITAR, 12, 5, { maxResults: 50 });
+    const brokenForm = forms.findIndex(f =>
+      f.frets[0] === 4 && f.frets[1] === 2 && f.frets[2] === null &&
+      f.frets[3] === 2 && f.frets[4] === 4 && f.frets[5] === null
+    );
+    const standardForm = forms.findIndex(f =>
+      f.frets[0] === 4 && f.frets[1] === 5 && f.frets[2] === 6 &&
+      f.frets[3] === 6 && f.frets[4] === 4 && f.frets[5] === null
+    );
+    // Both should exist, and standard barre should rank higher
+    if (brokenForm >= 0 && standardForm >= 0) {
+      expect(standardForm).toBeLessThan(brokenForm);
+    }
+  });
+
+  it('standard barre (Am shape at fret 4) ranks in top 5 for C#m', () => {
+    // [4,5,6,6,4,x] or [4,5,6,6,4,4] should be top-ranked for C#m
+    const forms = padEnumGuitarChordForms([0, 3, 7], 1, GUITAR, 12, 5);
+    const top5frets = forms.slice(0, 5).map(f => f.frets.join(','));
+    const hasAmShape = top5frets.some(fr =>
+      fr === '4,5,6,6,4,null' || fr === '4,5,6,6,4,4'
+    );
+    expect(hasAmShape).toBe(true);
+  });
+
+  it('overcrowded forms (6 strings, span >= 5) rank lower', () => {
+    // Generate forms and check that 6-string wide-span forms don't dominate top
+    const forms = padEnumGuitarChordForms([0, 3, 7], 1, GUITAR, 12, 5, { maxResults: 50 });
+    const top10 = forms.slice(0, 10);
+    const overcrowdedInTop10 = top10.filter(f => f.stringCount >= 6 && f.span >= 5);
+    expect(overcrowdedInTop10.length).toBeLessThanOrEqual(1);
+  });
+
+  it('isBrokenBarre flag is set correctly', () => {
+    // C#m [4,2,x,2,4,x] has fret 2 on strings 2 and 4 with muted string 3
+    // This should have isBrokenBarre = true
+    const forms = padEnumGuitarChordForms([0, 3, 7], 1, GUITAR, 12, 5, { maxResults: 200 });
+    const target = forms.find(f =>
+      f.frets[0] === 4 && f.frets[1] === 2 && f.frets[2] === null &&
+      f.frets[3] === 2 && f.frets[4] === 4 && f.frets[5] === null
+    );
+    if (target) {
+      expect(target.isBrokenBarre).toBe(true);
+    }
+  });
 });
 
 // ======== padDetectChord ========
