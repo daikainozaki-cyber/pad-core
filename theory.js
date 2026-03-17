@@ -318,6 +318,58 @@ function padCalcAllVoicingPositions(bassRow, bassCol, offsets, gridRows, gridCol
   return results.slice(0, maxResults);
 }
 
+// ======== COMPACT PAD POSITIONS ========
+
+/**
+ * Find the most compact pad positions for a set of MIDI notes.
+ * Each MIDI note maps to 1-2 grid positions; this picks the combination
+ * that minimizes the bounding box (maxDim first, then area).
+ * Returns [{row, col, midi}] — one position per in-range note.
+ */
+function padFindCompactPositions(midiNotes, gridRows, gridCols, bm, rowInterval) {
+  var candidates = [];
+  for (var i = 0; i < midiNotes.length; i++) {
+    var midi = midiNotes[i];
+    var positions = [];
+    for (var r = 0; r < gridRows; r++) {
+      var c = midi - bm - r * rowInterval;
+      if (c >= 0 && c < gridCols) positions.push({ row: r, col: c, midi: midi });
+    }
+    candidates.push(positions);
+  }
+  var validIndices = [];
+  for (var j = 0; j < candidates.length; j++) {
+    if (candidates[j].length > 0) validIndices.push(j);
+  }
+  if (validIndices.length === 0) return [];
+  var validCands = validIndices.map(function(i) { return candidates[i]; });
+  var best = null;
+  function search(idx, chosen) {
+    if (idx === validCands.length) {
+      var minR = chosen[0].row, maxR = minR, minC = chosen[0].col, maxC = minC;
+      for (var k = 1; k < chosen.length; k++) {
+        if (chosen[k].row < minR) minR = chosen[k].row;
+        if (chosen[k].row > maxR) maxR = chosen[k].row;
+        if (chosen[k].col < minC) minC = chosen[k].col;
+        if (chosen[k].col > maxC) maxC = chosen[k].col;
+      }
+      var maxDim = Math.max(maxR - minR + 1, maxC - minC + 1);
+      var area = (maxR - minR + 1) * (maxC - minC + 1);
+      if (!best || maxDim < best.maxDim || (maxDim === best.maxDim && area < best.area)) {
+        best = { positions: chosen.slice(), maxDim: maxDim, area: area };
+      }
+      return;
+    }
+    for (var p = 0; p < validCands[idx].length; p++) {
+      chosen.push(validCands[idx][p]);
+      search(idx + 1, chosen);
+      chosen.pop();
+    }
+  }
+  search(0, []);
+  return best ? best.positions : [];
+}
+
 // ======== CHORD CONTEXT KEY ========
 
 function padChordContextKey(root, scaleIdx, key) {
@@ -1654,7 +1706,7 @@ if (typeof module !== 'undefined') module.exports = {
   padPitchClass, padGetParentMajorKey, padPcName, padNoteNameForKey,
   padFifthsDistance, padApplyTension,
   padCalcVoicingOffsets, padGetBassCase, padApplyOnChordBass,
-  padGetShellIntervals, padCalcAllVoicingPositions,
+  padGetShellIntervals, padCalcAllVoicingPositions, padFindCompactPositions,
   padChordContextKey, padGetBuilderChordName,
   padGetDiatonicTetrads, padFindParentScales,
   padEnumGuitarChordForms, padAssignFingers, padDetectChord,

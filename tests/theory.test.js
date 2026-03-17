@@ -1291,3 +1291,98 @@ describe('padClassifyColor', () => {
     expect(padClassifyColor('guide3', custom)).toBe('#000');
   });
 });
+
+// ======== padFindCompactPositions ========
+describe('padFindCompactPositions', () => {
+  // Standard 64-pad: 8 rows, 8 cols, baseMidi=36, rowInterval=5
+  const ROWS = 8, COLS = 8, BM = 36, RI = 5;
+
+  it('returns empty for empty input', () => {
+    expect(padFindCompactPositions([], ROWS, COLS, BM, RI)).toEqual([]);
+  });
+
+  it('returns empty for out-of-range MIDI notes', () => {
+    // MIDI 10 is below grid (baseMidi=36)
+    expect(padFindCompactPositions([10], ROWS, COLS, BM, RI)).toEqual([]);
+  });
+
+  it('returns single position for single note', () => {
+    // MIDI 36 = row 0, col 0
+    const result = padFindCompactPositions([36], ROWS, COLS, BM, RI);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual({ row: 0, col: 0, midi: 36 });
+  });
+
+  it('returns single position for note with one grid position', () => {
+    // MIDI 43 = row 0 col 7 (43-36=7) OR row 1 col 2 (43-36-5=2)
+    const result = padFindCompactPositions([43], ROWS, COLS, BM, RI);
+    expect(result).toHaveLength(1);
+    // Should pick one of the two valid positions
+    expect(result[0].midi).toBe(43);
+  });
+
+  it('picks compact layout for two notes with alternatives', () => {
+    // C2=48: row 0 col 12 (invalid), row 1 col 7, row 2 col 2
+    // E2=52: row 1 col 11 (invalid), row 2 col 6, row 3 col 1
+    // Compact: both on row 2 (col 2 and col 6) → rowSpan=1
+    const result = padFindCompactPositions([48, 52], ROWS, COLS, BM, RI);
+    expect(result).toHaveLength(2);
+    const rows = result.map(p => p.row);
+    const cols = result.map(p => p.col);
+    const rowSpan = Math.max(...rows) - Math.min(...rows) + 1;
+    const colSpan = Math.max(...cols) - Math.min(...cols) + 1;
+    // Should be more compact than choosing lowest-row for each independently
+    expect(rowSpan).toBeLessThanOrEqual(2);
+  });
+
+  it('skips out-of-range notes but positions in-range ones', () => {
+    // Mix of in-range and out-of-range
+    const result = padFindCompactPositions([36, 10, 41], ROWS, COLS, BM, RI);
+    expect(result).toHaveLength(2); // only 36 and 41
+    expect(result.map(p => p.midi).sort()).toEqual([36, 41]);
+  });
+
+  it('handles typical 5-note TASTY voicing compactly', () => {
+    // Cm7(9): C=48, Eb=51, G=55, Bb=58, D=62
+    // All within pad range (36-78)
+    const midiNotes = [48, 51, 55, 58, 62];
+    const result = padFindCompactPositions(midiNotes, ROWS, COLS, BM, RI);
+    expect(result).toHaveLength(5);
+    const rows = result.map(p => p.row);
+    const cols = result.map(p => p.col);
+    const rowSpan = Math.max(...rows) - Math.min(...rows) + 1;
+    const colSpan = Math.max(...cols) - Math.min(...cols) + 1;
+    const maxDim = Math.max(rowSpan, colSpan);
+    // Should be reasonably compact (not scattered across full 8x8)
+    expect(maxDim).toBeLessThanOrEqual(6);
+  });
+
+  it('preserves MIDI values in output', () => {
+    const midiNotes = [48, 55, 60];
+    const result = padFindCompactPositions(midiNotes, ROWS, COLS, BM, RI);
+    const midiOut = result.map(p => p.midi).sort((a, b) => a - b);
+    expect(midiOut).toEqual([48, 55, 60]);
+  });
+
+  it('positions are valid grid coordinates', () => {
+    const midiNotes = [48, 51, 55, 58, 62];
+    const result = padFindCompactPositions(midiNotes, ROWS, COLS, BM, RI);
+    for (const p of result) {
+      expect(p.row).toBeGreaterThanOrEqual(0);
+      expect(p.row).toBeLessThan(ROWS);
+      expect(p.col).toBeGreaterThanOrEqual(0);
+      expect(p.col).toBeLessThan(COLS);
+      // Verify: baseMidi + row*rowInterval + col = midi
+      expect(BM + p.row * RI + p.col).toBe(p.midi);
+    }
+  });
+
+  it('handles note appearing on only one row', () => {
+    // MIDI 36 = row 0 col 0 (only position)
+    // MIDI 37 = row 0 col 1 (only position)
+    const result = padFindCompactPositions([36, 37], ROWS, COLS, BM, RI);
+    expect(result).toHaveLength(2);
+    expect(result[0]).toEqual({ row: 0, col: 0, midi: 36 });
+    expect(result[1]).toEqual({ row: 0, col: 1, midi: 37 });
+  });
+});

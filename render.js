@@ -1294,6 +1294,14 @@ function padComputeRenderState(opts) {
     }
   }
 
+  // Compact pad positions (TASTY or Stock)
+  var tastyPadPositions = null;
+  if (tastyMidiSet && tasty.padPositions && tasty.padPositions.length > 0) {
+    tastyPadPositions = tasty.padPositions;
+  } else if (tastyMidiSet && stock.padPositions && stock.padPositions.length > 0) {
+    tastyPadPositions = stock.padPositions;
+  }
+
   // ExtNotes override
   if (mode === 'chord' && !tastyMidiSet && extNotes.length > 0) {
     activePCS = new Set(extNotes.map(function(n) { return n % 12; }));
@@ -1345,7 +1353,8 @@ function padComputeRenderState(opts) {
     guide3PCS: guide3PCS, guide7PCS: guide7PCS, tensionPCS: tensionPCS,
     qualityPCS: qualityPCS, avoidPCS: avoidPCS,
     overlayPCS: overlayPCS, overlayCharPCS: overlayCharPCS,
-    tastyMidiSet: tastyMidiSet, tastyDegreeMap: tastyDegreeMap, tastyTopMidi: tastyTopMidi
+    tastyMidiSet: tastyMidiSet, tastyDegreeMap: tastyDegreeMap, tastyTopMidi: tastyTopMidi,
+    tastyPadPositions: tastyPadPositions
   };
 }
 
