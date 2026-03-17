@@ -715,7 +715,7 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
   var wGuideTone  = W.guideTone  !== undefined ? W.guideTone  : 40;
   var wOpenStr    = W.openStr    !== undefined ? W.openStr    : 15;
   var wStringCount= W.stringCount!== undefined ? W.stringCount: 30;
-  var wAvgFret    = W.avgFret    !== undefined ? W.avgFret    : 15;
+  var wAvgFret    = W.avgFret    !== undefined ? W.avgFret    : 12;
   var wSpan       = W.span       !== undefined ? W.span       : 10;
   var wGaps       = W.gaps       !== undefined ? W.gaps       : 15;
   var wFullFret   = W.fullFret   !== undefined ? W.fullFret   : 15;
