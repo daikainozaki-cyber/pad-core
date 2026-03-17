@@ -686,12 +686,14 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
   var refSet = null;
   if (typeof PAD_GUITAR_REFERENCE_FORMS !== 'undefined') {
     var tuningName = options.tuningName || null;
-    if (!tuningName) {
-      // Auto-detect standard tuning: [64,59,55,50,45,40] = EADGBE
-      if (tuning.length === 6 &&
-          tuning[0] === 64 && tuning[1] === 59 && tuning[2] === 55 &&
-          tuning[3] === 50 && tuning[4] === 45 && tuning[5] === 40) {
-        tuningName = 'standard';
+    if (!tuningName && typeof PAD_GUITAR_TUNING !== 'undefined') {
+      // Auto-detect standard tuning by comparing with PAD_GUITAR_TUNING
+      if (tuning.length === PAD_GUITAR_TUNING.length) {
+        var isStandard = true;
+        for (var ti = 0; ti < tuning.length; ti++) {
+          if (tuning[ti] !== PAD_GUITAR_TUNING[ti]) { isStandard = false; break; }
+        }
+        if (isStandard) tuningName = 'standard';
       }
     }
     if (tuningName && PAD_GUITAR_REFERENCE_FORMS[tuningName]) {
