@@ -794,9 +794,14 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
         if (chosen[i] !== null) {
           var midi = tuning[i] + chosen[i];
           notePCs[midi % 12] = true;
-          // Unison avoidance: reject exact same MIDI note on two strings
-          if (midiNotes[midi]) return;
-          midiNotes[midi] = true;
+          // Unison avoidance: reject exact same MIDI note on two fretted strings.
+          // Exception: open string unisons are allowed — guitarists use them
+          // intentionally for richer sound (chorus effect from string detuning).
+          if (midiNotes[midi]) {
+            if (chosen[i] > 0 && midiNotes[midi] > 0) return; // both fretted = reject
+            // at least one is open = allow (but flag for scoring)
+          }
+          midiNotes[midi] = chosen[i] > 0 ? 1 : -1; // 1=fretted, -1=open
           if (midi < lowestMidi) { lowestMidi = midi; lowestPC = midi % 12; }
         }
       }
@@ -892,8 +897,11 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
         }
         var aboveSpread = aboveMaxStr - aboveMinStr;
         var aboveFretDiff = maxAboveFret - minFrettedFret;
-        // Wide spread only OK if fret difference is small (1-2 frets)
-        if (aboveSpread > 3 && aboveFretDiff > 2) return;
+        // Wide spread only OK if fret difference is small (1-3 frets).
+        // 3-fret diff with wide spread is playable with barre anchor
+        // (e.g. C#m [9,x,6,6,7,9]: barre at 6, fingers reach fret 9).
+        if (aboveSpread > 4 && aboveFretDiff > 3) return;
+        if (aboveSpread > 3 && aboveFretDiff > 3) return;
       }
 
       // Count gaps (muted strings between outermost sounding strings)
@@ -1096,7 +1104,7 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
         if (f >= 10) return String.fromCharCode(97 + f - 10);
         return String(f);
       }).join('');
-      if (refSet[fretKey]) refBonus = 100;
+      if (refSet[fretKey]) refBonus = 200;
     }
 
     return (r.rootInBass ? wRootBass : 0)
