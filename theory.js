@@ -791,10 +791,9 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
 
       // Finger unit feasibility: max 4 fingers available
       // Finger unit feasibility: barre = lowest fret pressed by index finger.
-      // A barre is valid only if the barred strings span contiguously
-      // (no muted or open strings breaking the barre in between).
-      // If the barre is broken, each contiguous group at minFrettedFret
-      // counts as a separate unit (= separate finger).
+      // Barre is valid if no OPEN strings (fret 0) break it — muted strings
+      // are OK (barre finger rests on them to mute). Open strings need to
+      // ring freely, so they break the barre into separate finger units.
       var fretGroups = {};
       var minFrettedFret = Infinity;
       for (var i = 0; i < numStrings; i++) {
