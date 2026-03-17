@@ -680,6 +680,30 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
   var allowRootless = !!options.allowRootless;
   var noOpen = !!options.noOpen; // funk/soul: no open strings (can't mute for tight rhythm)
 
+  // Reference voicing lookup: detect tuning, build reference set for this chord.
+  // Unknown tunings (8-string, open tunings without reference data) get no bonus,
+  // so the scoring logic alone determines ranking — this is by design.
+  var refSet = null;
+  if (typeof PAD_GUITAR_REFERENCE_FORMS !== 'undefined') {
+    var tuningName = options.tuningName || null;
+    if (!tuningName) {
+      // Auto-detect standard tuning: [64,59,55,50,45,40] = EADGBE
+      if (tuning.length === 6 &&
+          tuning[0] === 64 && tuning[1] === 59 && tuning[2] === 55 &&
+          tuning[3] === 50 && tuning[4] === 45 && tuning[5] === 40) {
+        tuningName = 'standard';
+      }
+    }
+    if (tuningName && PAD_GUITAR_REFERENCE_FORMS[tuningName]) {
+      var chordKey = rootPC + '|' + chordPCS.join(',');
+      var refForms = PAD_GUITAR_REFERENCE_FORMS[tuningName][chordKey];
+      if (refForms) {
+        refSet = {};
+        for (var ri = 0; ri < refForms.length; ri++) refSet[refForms[ri]] = true;
+      }
+    }
+  }
+
   // Scoring weights: override via options.weights for genre presets (bossa/jazz/funk)
   var W = options.weights || {};
   var wRootBass   = W.rootBass   !== undefined ? W.rootBass   : 120;
@@ -1059,6 +1083,20 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
     var thinPenalty = 0;
     if (r.stringCount <= 3 && avgFret >= 3) thinPenalty = 30;
 
+    // Reference bonus: human-verified voicing from reference database.
+    // These are forms that real guitarists actually play.
+    // Bonus is large enough to pull high-position forms into top results,
+    // but not so large that it overrides all other scoring.
+    var refBonus = 0;
+    if (refSet) {
+      var fretKey = r.frets.map(function(f) {
+        if (f === null) return 'x';
+        if (f >= 10) return String.fromCharCode(97 + f - 10);
+        return String(f);
+      }).join('');
+      if (refSet[fretKey]) refBonus = 100;
+    }
+
     return (r.rootInBass ? wRootBass : 0)
       + fifthBassBonus
       + rootStrBonus
@@ -1075,7 +1113,8 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       - brokenBarrePenalty
       - overcrowdedPenalty
       - thinPenalty
-      - stretchPenalty;
+      - stretchPenalty
+      + refBonus;
   }
 
   if (allowRootless) {
