@@ -1159,7 +1159,115 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
     results = pinned.concat(results);
   }
 
-  return results.slice(0, maxResults);
+  var finalResults = results.slice(0, maxResults);
+  // Enrich results with finger assignments and barre info
+  for (var fi = 0; fi < finalResults.length; fi++) {
+    var fa = padAssignFingers(finalResults[fi].frets);
+    finalResults[fi].fingers = fa.fingers;
+    finalResults[fi].barre = fa.barre;
+  }
+  return finalResults;
+}
+
+// ======== FINGER ASSIGNMENT ========
+// Assigns finger numbers (1-4) to fretted strings based on JGuitar conventions.
+// Input: frets array (null=muted, 0=open, 1+=fretted). Index 0=high E, 5=low E.
+// Returns: {fingers: [null/0/1/2/3/4 per string], barre: {fret, from, to} | null}
+//
+// Rules:
+// - Finger 1 (index) = lowest fretted note. Barre when physically needed.
+// - Barre when: fretted notes > 4 (can't cover with individual fingers)
+//   or 3+ strings at minFret (natural barre position).
+// - Remaining fretted notes get fingers 2, 3, 4 in order of fret ascending.
+// - Same fret: bass-side string (higher index) gets lower finger number.
+
+function padAssignFingers(frets) {
+  var numStrings = frets.length;
+  var fingers = new Array(numStrings);
+  var frettedPositions = [];
+
+  for (var i = 0; i < numStrings; i++) {
+    if (frets[i] === null) {
+      fingers[i] = null;
+    } else if (frets[i] === 0) {
+      fingers[i] = 0;
+    } else {
+      fingers[i] = -1; // placeholder: to be assigned
+      frettedPositions.push({string: i, fret: frets[i]});
+    }
+  }
+
+  if (frettedPositions.length === 0) {
+    return {fingers: fingers, barre: null};
+  }
+
+  // Find minimum fretted fret
+  var minFret = Infinity;
+  for (var i = 0; i < frettedPositions.length; i++) {
+    if (frettedPositions[i].fret < minFret) minFret = frettedPositions[i].fret;
+  }
+
+  // Strings at minimum fret
+  var minFretStrings = [];
+  for (var i = 0; i < frettedPositions.length; i++) {
+    if (frettedPositions[i].fret === minFret) {
+      minFretStrings.push(frettedPositions[i].string);
+    }
+  }
+  minFretStrings.sort(function(a, b) { return a - b; });
+
+  // Determine barre: used when physically needed or when 3+ strings at minFret
+  var barre = null;
+  var useBarre = minFretStrings.length >= 2 &&
+    (frettedPositions.length > 4 || minFretStrings.length >= 3);
+
+  if (useBarre) {
+    var fromStr = minFretStrings[0];
+    var toStr = minFretStrings[minFretStrings.length - 1];
+    // Verify barre geometry: no lower fret between endpoints
+    var valid = true;
+    for (var s = fromStr + 1; s < toStr; s++) {
+      if (frets[s] !== null && frets[s] > 0 && frets[s] < minFret) {
+        valid = false;
+        break;
+      }
+    }
+    if (valid) {
+      barre = {fret: minFret, from: fromStr, to: toStr};
+      for (var i = 0; i < minFretStrings.length; i++) {
+        fingers[minFretStrings[i]] = 1;
+      }
+    }
+  }
+
+  // If no barre, assign finger 1 to the bass-side string at minFret
+  // (index finger naturally sits closer to bass end of the neck)
+  if (!barre) {
+    fingers[minFretStrings[minFretStrings.length - 1]] = 1;
+  }
+
+  // Collect remaining unassigned fretted positions
+  var unassigned = [];
+  for (var i = 0; i < numStrings; i++) {
+    if (frets[i] !== null && frets[i] > 0 && fingers[i] === -1) {
+      unassigned.push({string: i, fret: frets[i]});
+    }
+  }
+
+  // Sort: fret ascending, then string descending (bass side gets lower finger number)
+  unassigned.sort(function(a, b) {
+    if (a.fret !== b.fret) return a.fret - b.fret;
+    return b.string - a.string;
+  });
+
+  // Assign fingers 2, 3, 4
+  var nextFinger = 2;
+  for (var i = 0; i < unassigned.length && nextFinger <= 4; i++) {
+    fingers[unassigned[i].string] = nextFinger;
+    nextFinger++;
+  }
+
+  return {fingers: fingers, barre: barre};
 }
 
 // ======== CHORD DETECTION ========
@@ -1463,7 +1571,7 @@ if (typeof module !== 'undefined') module.exports = {
   padGetShellIntervals, padCalcAllVoicingPositions,
   padChordContextKey, padGetBuilderChordName,
   padGetDiatonicTetrads, padFindParentScales,
-  padEnumGuitarChordForms, padDetectChord,
+  padEnumGuitarChordForms, padAssignFingers, padDetectChord,
   padParseStockVoicings, padMatchStockVoicing,
   padClassifyPC, padClassifyColor,
   DIATONIC_CHORD_DB,

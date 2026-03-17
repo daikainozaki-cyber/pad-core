@@ -820,6 +820,132 @@ describe('padEnumGuitarChordForms', () => {
   });
 });
 
+// ======== padAssignFingers ========
+describe('padAssignFingers', () => {
+  // Tuning: index 0=high E(64), 1=B(59), 2=G(55), 3=D(50), 4=A(45), 5=low E(40)
+
+  it('C open: no barre, 3 fingers', () => {
+    // x32010 (low-to-high) = [0, 1, 0, 2, 3, null] (high-to-low)
+    const result = padAssignFingers([0, 1, 0, 2, 3, null]);
+    expect(result.barre).toBeNull();
+    expect(result.fingers).toEqual([0, 1, 0, 2, 3, null]);
+    // finger 1 on B@1, finger 2 on D@2, finger 3 on A@3
+  });
+
+  it('Am open: no barre, 3 fingers', () => {
+    // x02210 (low-to-high) = [0, 1, 2, 2, 0, null] (high-to-low)
+    const result = padAssignFingers([0, 1, 2, 2, 0, null]);
+    expect(result.barre).toBeNull();
+    // finger 1 on B@1, finger 2 on D@2 (bass side), finger 3 on G@2
+    expect(result.fingers[0]).toBe(0);  // open
+    expect(result.fingers[1]).toBe(1);  // index
+    expect(result.fingers[3]).toBe(2);  // middle (D, bass side of same fret)
+    expect(result.fingers[2]).toBe(3);  // ring (G, treble side of same fret)
+    expect(result.fingers[4]).toBe(0);  // open
+    expect(result.fingers[5]).toBeNull();
+  });
+
+  it('D open: no barre, 3 fingers', () => {
+    // xx0232 (low-to-high) = [2, 3, 2, 0, 0, null] (high-to-low)
+    // Note: null at low E (string 5), null at A (string 4)... wait
+    // Actually: x x 0 2 3 2 → code: [2, 3, 2, 0, null, null]
+    const result = padAssignFingers([2, 3, 2, 0, null, null]);
+    expect(result.barre).toBeNull();
+    // finger 1 on G@2 (bass side of fret 2), finger 2 on high E@2, finger 3 on B@3
+    expect(result.fingers[2]).toBe(1);  // index on G
+    expect(result.fingers[0]).toBe(2);  // middle on high E
+    expect(result.fingers[1]).toBe(3);  // ring on B
+    expect(result.fingers[3]).toBe(0);  // open D
+  });
+
+  it('G open: no barre, 3 fingers', () => {
+    // 320003 (low-to-high) = [3, 0, 0, 0, 2, 3] (high-to-low)
+    const result = padAssignFingers([3, 0, 0, 0, 2, 3]);
+    expect(result.barre).toBeNull();
+    // finger 1 on A@2, finger 2 on low E@3 (bass), finger 3 on high E@3
+    expect(result.fingers[4]).toBe(1);  // index on A
+    expect(result.fingers[5]).toBe(2);  // middle on low E (bass side)
+    expect(result.fingers[0]).toBe(3);  // ring on high E
+  });
+
+  it('E open: no barre, 3 fingers', () => {
+    // 022100 (low-to-high) = [0, 0, 1, 2, 2, 0] (high-to-low)
+    const result = padAssignFingers([0, 0, 1, 2, 2, 0]);
+    expect(result.barre).toBeNull();
+    expect(result.fingers[2]).toBe(1);  // index on G@1
+    expect(result.fingers[4]).toBe(2);  // middle on A@2 (bass)
+    expect(result.fingers[3]).toBe(3);  // ring on D@2
+  });
+
+  it('F barre: full barre at fret 1', () => {
+    // 133211 (low-to-high) = [1, 1, 2, 3, 3, 1] (high-to-low)
+    const result = padAssignFingers([1, 1, 2, 3, 3, 1]);
+    expect(result.barre).toEqual({fret: 1, from: 0, to: 5});
+    // finger 1 = barre at fret 1 (strings 0,1,5)
+    expect(result.fingers[0]).toBe(1);
+    expect(result.fingers[1]).toBe(1);
+    expect(result.fingers[5]).toBe(1);
+    // finger 2 on G@2, finger 3 on A@3 (bass), finger 4 on D@3
+    expect(result.fingers[2]).toBe(2);
+    expect(result.fingers[4]).toBe(3);
+    expect(result.fingers[3]).toBe(4);
+  });
+
+  it('Bm barre (A-shape): barre at fret 2', () => {
+    // x24432 (low-to-high) = [2, 3, 4, 4, 2, null] (high-to-low)
+    const result = padAssignFingers([2, 3, 4, 4, 2, null]);
+    expect(result.barre).toEqual({fret: 2, from: 0, to: 4});
+    expect(result.fingers[0]).toBe(1);  // barre
+    expect(result.fingers[4]).toBe(1);  // barre
+    expect(result.fingers[1]).toBe(2);  // B@3
+    expect(result.fingers[3]).toBe(3);  // D@4 (bass side)
+    expect(result.fingers[2]).toBe(4);  // G@4
+    expect(result.fingers[5]).toBeNull();
+  });
+
+  it('all-open: no fingers, no barre', () => {
+    const result = padAssignFingers([0, 0, 0, 0, 0, 0]);
+    expect(result.barre).toBeNull();
+    expect(result.fingers).toEqual([0, 0, 0, 0, 0, 0]);
+  });
+
+  it('single fretted note: finger 1, no barre', () => {
+    const result = padAssignFingers([null, null, null, null, 3, null]);
+    expect(result.barre).toBeNull();
+    expect(result.fingers[4]).toBe(1);
+  });
+
+  it('padEnumGuitarChordForms results include fingers and barre', () => {
+    const GUITAR = [64, 59, 55, 50, 45, 40];
+    const forms = padEnumGuitarChordForms([0, 4, 7], 0, GUITAR, 21, 4);
+    expect(forms.length).toBeGreaterThan(0);
+    for (const f of forms) {
+      expect(f.fingers).toBeDefined();
+      expect(f.fingers.length).toBe(6);
+      expect(f.barre === null || typeof f.barre === 'object').toBe(true);
+      // Every fretted string should have a finger 1-4
+      for (let s = 0; s < 6; s++) {
+        if (f.frets[s] === null) expect(f.fingers[s]).toBeNull();
+        else if (f.frets[s] === 0) expect(f.fingers[s]).toBe(0);
+        else expect(f.fingers[s]).toBeGreaterThanOrEqual(1);
+      }
+    }
+  });
+
+  it('F barre results have barre info', () => {
+    const GUITAR = [64, 59, 55, 50, 45, 40];
+    const forms = padEnumGuitarChordForms([0, 4, 7], 5, GUITAR, 21, 4);
+    // F major should have a 6-string barre form
+    const fullBarre = forms.find(f =>
+      f.frets[0] === 1 && f.frets[1] === 1 && f.frets[5] === 1
+    );
+    if (fullBarre) {
+      expect(fullBarre.barre).not.toBeNull();
+      expect(fullBarre.barre.fret).toBe(1);
+    }
+  });
+});
+
 // ======== padDetectChord ========
 describe('padDetectChord', () => {
   function hasMatch(results, pattern) {
