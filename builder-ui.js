@@ -97,23 +97,18 @@ function padBuildTensionGrid(container, onToggle) {
   if (!container) return { clear: function() {}, getBtns: function() { return []; } };
   container.innerHTML = '';
 
-  var maxCols = Math.max.apply(null, TENSION_ROWS.map(function(r) { return r.length; }));
-  container.style.gridTemplateColumns = 'repeat(' + maxCols + ', 1fr)';
-
   TENSION_ROWS.forEach(function(row) {
-    for (var i = 0; i < maxCols; i++) {
-      var t = row[i] || null;
+    row.forEach(function(t) {
+      if (!t) return;
       var btn = document.createElement('button');
-      btn.className = 'tension-btn' + (!t ? ' empty' : '');
-      btn._tension = t || null;
-      if (t) {
-        btn.textContent = t.label;
-        btn.onclick = (function(tension, el) {
-          return function() { onToggle(tension, el); };
-        })(t, btn);
-      }
+      btn.className = 'tension-btn';
+      btn._tension = t;
+      btn.textContent = t.label;
+      btn.onclick = (function(tension, el) {
+        return function() { onToggle(tension, el); };
+      })(t, btn);
       container.appendChild(btn);
-    }
+    });
   });
 
   return {
