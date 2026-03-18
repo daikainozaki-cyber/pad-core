@@ -36,26 +36,31 @@ var PAD_CIRCLE_NOTE_NAMES = [
 ];
 
 var PAD_CIRCLE_DEFAULT_COLORS = {
-  tonic: '#ff9800',
-  subdominant: '#42a5f5',
-  dominant: '#ef5350',
-  majorSegment: '#388e3c',
-  minorSegment: '#81c784',
-  selectedStroke: '#ff6f00',
-  centerFill: 'white',
-  majorText: 'white',
-  minorText: '#1b5e20',
-  segmentStroke: 'white',
-  titleColor: '#2e7d32',
-  subtitleColor: '#66bb6a',
-  degreeText: '#333',
-  degreeTextAlt: 'white',
-  degreeStroke: 'white',
-  buttonBg: 'white',
-  buttonActiveText: 'white',
-  buttonNatural: '#66bb6a',
-  buttonHarmonic: '#1b5e20',
-  buttonMelodic: '#43a047'
+  // CVD-safe harmonic function colors (Okabe-Ito derived, dark-theme adapted)
+  // Blue-orange axis = universally distinguishable; mauve adds luminance separation
+  // Protanopia/Deuteranopia: amber→tan, blue→blue, mauve→grayish (3 luminances)
+  tonic: '#a08060',        // Warm amber — home, stable
+  subdominant: '#588898',  // Steel blue — cool, departure
+  dominant: '#886878',     // Muted mauve — tension, wants to resolve
+  // Base segments (neutral dark — color reserved for harmonic function)
+  majorSegment: '#2c2c2c',
+  minorSegment: '#262626',
+  selectedStroke: '#d4a85c',
+  centerFill: '#1e1e1e',
+  majorText: '#c8c8c8',
+  minorText: '#909090',
+  segmentStroke: '#383838',
+  titleColor: '#c8c8c8',
+  subtitleColor: '#707070',
+  degreeText: '#c8c8c8',
+  degreeTextAlt: 'rgba(255,255,255,0.90)',
+  degreeStroke: '#383838',
+  buttonBg: '#2c2c2c',
+  buttonActiveText: '#c8c8c8',
+  buttonInactiveText: '#606060',
+  buttonNatural: '#a0a0a0',
+  buttonHarmonic: '#808080',
+  buttonMelodic: '#909090'
 };
 
 // ======== DEGREE DATA (circle overlay) ========
@@ -204,6 +209,7 @@ function padRenderCircleOfFifths(svgEl, options) {
     degreeStroke: uc.degreeStroke || dc.degreeStroke,
     buttonBg: uc.buttonBg || dc.buttonBg,
     buttonActiveText: uc.buttonActiveText || dc.buttonActiveText,
+    buttonInactiveText: uc.buttonInactiveText || dc.buttonInactiveText,
     buttonNatural: uc.buttonNatural || dc.buttonNatural,
     buttonHarmonic: uc.buttonHarmonic || dc.buttonHarmonic,
     buttonMelodic: uc.buttonMelodic || dc.buttonMelodic
@@ -306,7 +312,7 @@ function padRenderCircleOfFifths(svgEl, options) {
       majorText.setAttribute('dominant-baseline', 'middle');
       majorText.setAttribute('font-size', '22');
       majorText.setAttribute('font-weight', '600');
-      majorText.setAttribute('fill', majDegs ? 'rgba(255,255,255,0.95)' : colors.majorText);
+      majorText.setAttribute('fill', majDegs ? colors.degreeTextAlt : colors.majorText);
       majorText.setAttribute('pointer-events', 'none');
       majorText.setAttribute('style', 'text-rendering: optimizeLegibility;');
       if (hasDegreeSelection && !majDegs) majorText.setAttribute('fill-opacity', '0.4');
@@ -325,7 +331,7 @@ function padRenderCircleOfFifths(svgEl, options) {
         majDegText.setAttribute('dominant-baseline', 'middle');
         majDegText.setAttribute('font-size', '14');
         majDegText.setAttribute('font-weight', '700');
-        majDegText.setAttribute('fill', 'white');
+        majDegText.setAttribute('fill', colors.degreeTextAlt);
         majDegText.setAttribute('pointer-events', 'none');
         majDegText.setAttribute('style', 'text-rendering: optimizeLegibility;');
         majDegText.textContent = labels.join('/');
@@ -370,7 +376,7 @@ function padRenderCircleOfFifths(svgEl, options) {
       minorText.setAttribute('dominant-baseline', 'middle');
       minorText.setAttribute('font-size', '16');
       minorText.setAttribute('font-weight', '500');
-      minorText.setAttribute('fill', minDegs ? 'rgba(255,255,255,0.95)' : colors.minorText);
+      minorText.setAttribute('fill', minDegs ? colors.degreeTextAlt : colors.minorText);
       minorText.setAttribute('pointer-events', 'none');
       minorText.setAttribute('style', 'text-rendering: optimizeLegibility;');
       if (hasDegreeSelection && !minDegs) minorText.setAttribute('fill-opacity', '0.4');
@@ -389,7 +395,7 @@ function padRenderCircleOfFifths(svgEl, options) {
         minDegText.setAttribute('dominant-baseline', 'middle');
         minDegText.setAttribute('font-size', '12');
         minDegText.setAttribute('font-weight', '700');
-        minDegText.setAttribute('fill', 'white');
+        minDegText.setAttribute('fill', colors.degreeTextAlt);
         minDegText.setAttribute('pointer-events', 'none');
         minDegText.setAttribute('style', 'text-rendering: optimizeLegibility;');
         minDegText.textContent = labelsMin.join('/');
@@ -488,7 +494,7 @@ function padRenderCircleOfFifths(svgEl, options) {
         label.setAttribute('text-anchor', 'middle');
         label.setAttribute('font-size', isActive ? '14' : '11');
         label.setAttribute('font-weight', isActive ? '700' : '400');
-        label.setAttribute('fill', isActive ? m.color : '#888');
+        label.setAttribute('fill', isActive ? m.color : colors.buttonInactiveText);
         label.setAttribute('pointer-events', 'none');
         label.setAttribute('style', 'text-rendering: optimizeLegibility;');
         label.textContent = m.label;
