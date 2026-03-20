@@ -293,6 +293,7 @@ function padRenderCircleOfFifths(svgEl, options) {
       majorSeg.setAttribute('stroke', colors.segmentStroke);
       majorSeg.setAttribute('stroke-width', '2');
       majorSeg.setAttribute('cursor', 'pointer');
+      majorSeg.setAttribute('data-info', 'info.cof_major');
       majorSeg.addEventListener('click', (function(i) {
         return function() {
           state.selectedKeyIndex = i;
@@ -357,6 +358,7 @@ function padRenderCircleOfFifths(svgEl, options) {
       minorSeg.setAttribute('stroke', colors.segmentStroke);
       minorSeg.setAttribute('stroke-width', '2');
       minorSeg.setAttribute('cursor', 'pointer');
+      minorSeg.setAttribute('data-info', 'info.cof_minor');
       minorSeg.addEventListener('click', (function(i) {
         return function() {
           state.selectedKeyIndex = i;
@@ -479,6 +481,7 @@ function padRenderCircleOfFifths(svgEl, options) {
         hitArea.setAttribute('height', 20);
         hitArea.setAttribute('fill', 'transparent');
         hitArea.setAttribute('cursor', 'pointer');
+        hitArea.setAttribute('data-info', 'info.cof_' + m.key);
         hitArea.addEventListener('click', (function(mode) {
           return function() {
             state.scaleMode = mode;
