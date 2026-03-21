@@ -185,6 +185,8 @@ function padRenderCircleOfFifths(svgEl, options) {
     showDegrees: opts.showDegrees !== false,
     showScaleModeButtons: opts.showScaleModeButtons !== false,
     showTitle: opts.showTitle !== false,
+    titleText: opts.titleText || null,
+    subtitleText: opts.subtitleText || null,
     onKeySelect: opts.onKeySelect || null,
     onScaleModeChange: opts.onScaleModeChange || null
   };
@@ -441,20 +443,28 @@ function padRenderCircleOfFifths(svgEl, options) {
       title1.setAttribute('font-weight', '700');
       title1.setAttribute('fill', colors.titleColor);
       title1.setAttribute('style', 'text-rendering: optimizeLegibility;');
-      title1.textContent = '五度圏';
-      svgEl.appendChild(title1);
-
-      var title2 = svgNS('text');
-      title2.setAttribute('x', CX);
-      title2.setAttribute('y', CY - 30);
-      title2.setAttribute('text-anchor', 'middle');
-      title2.setAttribute('dominant-baseline', 'middle');
-      title2.setAttribute('font-size', '16');
-      title2.setAttribute('font-weight', '400');
-      title2.setAttribute('fill', colors.subtitleColor);
-      title2.setAttribute('style', 'text-rendering: optimizeLegibility;');
-      title2.textContent = 'Circle of Fifths';
-      svgEl.appendChild(title2);
+      var mainTitle = state.titleText || 'Circle of Fifths';
+      var subTitle = state.subtitleText || null;
+      if (subTitle) {
+        title1.setAttribute('y', CY - 10);
+        title1.textContent = mainTitle;
+        svgEl.appendChild(title1);
+        var title2 = svgNS('text');
+        title2.setAttribute('x', CX);
+        title2.setAttribute('y', CY + 14);
+        title2.setAttribute('text-anchor', 'middle');
+        title2.setAttribute('dominant-baseline', 'middle');
+        title2.setAttribute('font-size', '16');
+        title2.setAttribute('font-weight', '400');
+        title2.setAttribute('fill', colors.subtitleColor);
+        title2.setAttribute('style', 'text-rendering: optimizeLegibility;');
+        title2.textContent = subTitle;
+        svgEl.appendChild(title2);
+      } else {
+        title1.setAttribute('y', CY);
+        title1.textContent = mainTitle;
+        svgEl.appendChild(title1);
+      }
     }
 
     // --- Scale mode toggle (minor only, compact inline labels) ---
@@ -519,6 +529,8 @@ function padRenderCircleOfFifths(svgEl, options) {
       if (no.showDegrees !== undefined) state.showDegrees = no.showDegrees;
       if (no.showScaleModeButtons !== undefined) state.showScaleModeButtons = no.showScaleModeButtons;
       if (no.showTitle !== undefined) state.showTitle = no.showTitle;
+      if (no.titleText !== undefined) state.titleText = no.titleText;
+      if (no.subtitleText !== undefined) state.subtitleText = no.subtitleText;
       if (no.onKeySelect !== undefined) state.onKeySelect = no.onKeySelect;
       if (no.onScaleModeChange !== undefined) state.onScaleModeChange = no.onScaleModeChange;
       if (no.colors) {
