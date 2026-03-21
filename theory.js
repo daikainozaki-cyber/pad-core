@@ -484,6 +484,11 @@ function padGetDiatonicTetrads(scalePCS, key, noteCount) {
     var chordName = KEY_SPELLINGS[parentKey][rootPC] + quality.name;
 
     var roman = ROMAN[i];
+    // Add b/# prefix when scale degree differs from major scale
+    var MAJOR_INTERVALS = [0, 2, 4, 5, 7, 9, 11];
+    var degreePrefix = '';
+    if (scalePCS[i] < MAJOR_INTERVALS[i]) degreePrefix = 'b';
+    else if (scalePCS[i] > MAJOR_INTERVALS[i]) degreePrefix = '#';
     var suffix;
     if (noteCount === 3) {
       // Triad roman numerals: same convention as tetrads (upper + suffix)
@@ -498,15 +503,15 @@ function padGetDiatonicTetrads(scalePCS, key, noteCount) {
       switch (quality.name) {
         case '\u25B37': suffix = '\u25B37'; break;
         case '7':       suffix = '7'; break;
-        case 'm7':      roman = roman.toLowerCase(); suffix = '7'; break;
-        case 'm\u25B37': roman = roman.toLowerCase(); suffix = '\u25B37'; break;
-        case 'm7(b5)':  roman = roman.toLowerCase(); suffix = '\u00F87'; break;
-        case 'dim7':    roman = roman.toLowerCase(); suffix = '\u00B07'; break;
-        case 'aug\u25B37': suffix = '+\u25B37'; break;
+        case 'm7':      suffix = 'm7'; break;
+        case 'm\u25B37': suffix = 'm\u25B37'; break;
+        case 'm7(b5)':  suffix = 'm7(b5)'; break;
+        case 'dim7':    suffix = 'dim7'; break;
+        case 'aug\u25B37': suffix = 'aug\u25B37'; break;
         default:        suffix = ''; break;
       }
     }
-    var degree = roman + suffix;
+    var degree = degreePrefix + roman + suffix;
 
     tetrads.push({ rootPC: rootPC, pcs: pcs, quality: quality, chordName: chordName, degree: degree });
   }
