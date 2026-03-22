@@ -136,7 +136,7 @@ var PAD_CIRCLE_MINOR_DIATONIC_MELODIC = [
   { roman: '♭III', offset: -3, circleOffset: 0, suffix: 'Maj7(♯5)', harmonicFn: 'トニック（代理）', isMajor: true, colorType: 'tonic', isDiatonic: true },
   { roman: 'IV', offset: -1, circleOffset: 2, suffix: '7', harmonicFn: 'サブドミナント', isMajor: true, colorType: 'subdominant', isDiatonic: true },
   { roman: 'V', offset: 1, circleOffset: 4, suffix: '7', harmonicFn: 'ドミナント', isMajor: true, colorType: 'dominant', isDiatonic: true },
-  { roman: 'vi', offset: 3, circleOffset: 3, suffix: 'm7(♭5)', harmonicFn: 'サブドミナント（代理）', isMajor: false, colorType: 'subdominant', isDiatonic: true },
+  { roman: 'vi', offset: 3, circleOffset: 3, suffix: 'm7(♭5)', harmonicFn: 'トニック（代理）', isMajor: false, colorType: 'tonic', isDiatonic: true },
   { roman: 'vii', offset: 5, circleOffset: 5, suffix: 'm7(♭5)', harmonicFn: 'ドミナント（代理）', isMajor: false, colorType: 'dominant', isDiatonic: true },
   { roman: '♭II', offset: -5, circleOffset: -2, suffix: '7', harmonicFn: '裏コード（V7代理）', isMajor: true, colorType: 'dominant', isDiatonic: false }
 ];
