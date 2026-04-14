@@ -1168,6 +1168,26 @@ function padComputeRenderState(opts) {
   var selectedPS = o.selectedPS || null;
   var noRootLabel = o.noRootLabel || '...';
 
+  // C-fixed mode (urinami "Pad OS" philosophy, 2026-04-14):
+  // Pad always displays C Major scale; Key/Scale/Chord selection does not move
+  // the pad root. Instrument-correct behavior — pad layout is physical, key is
+  // cognitive. Input mode still reflects user-played notes.
+  if (o.cFixed && mode !== 'input') {
+    return {
+      activePCS: new Set([0, 2, 4, 5, 7, 9, 11]),
+      activeLabel: 'C Major (Pad OS)',
+      rootPC: 0,
+      bassPC: null,
+      charPCS: new Set([11]),
+      omittedPCS: new Set(),
+      guide3PCS: new Set(),
+      guide7PCS: new Set(),
+      tensionPCS: new Set(),
+      qualityPCS: null,
+      avoidPCS: new Set()
+    };
+  }
+
   var activePCS, activeLabel, rootPC, bassPC = null;
   var charPCS = new Set();
   var omittedPCS = new Set();
