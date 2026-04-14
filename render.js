@@ -1169,24 +1169,22 @@ function padComputeRenderState(opts) {
   var noRootLabel = o.noRootLabel || '...';
 
   // C-fixed mode (urinami "Pad OS" philosophy, 2026-04-14):
-  // Pad always displays C Major scale; Key/Scale/Chord selection does not move
-  // the pad root. Instrument-correct behavior — pad layout is physical, key is
-  // cognitive. Input mode still reflects user-played notes.
-  if (o.cFixed && mode !== 'input') {
-    return {
-      activePCS: new Set([0, 2, 4, 5, 7, 9, 11]),
-      activeLabel: 'C Major (Pad OS)',
-      rootPC: 0,
-      bassPC: null,
-      charPCS: new Set([11]),
-      omittedPCS: new Set(),
-      guide3PCS: new Set(),
-      guide7PCS: new Set(),
-      tensionPCS: new Set(),
-      qualityPCS: null,
-      avoidPCS: new Set()
-    };
-  }
+  // Pad/LED だけを C Major に固定する override を state に埋め込む。
+  // staff/guitar/bass/piano/info などは通常どおり key 連動で描画させるため、
+  // early return ではなく state.padOverride として分離する。
+  // Codex P1 fix (2026-04-14): 早期 return だと共有 render state を壊すので、
+  // 呼び出し側（renderPads / updateLaunchpadLEDs）が padOverride を見る設計に。
+  var _padOverride = (o.cFixed && mode !== 'input') ? {
+    activePCS: new Set([0, 2, 4, 5, 7, 9, 11]),
+    rootPC: 0,
+    bassPC: null,
+    omittedPCS: new Set(),
+    guide3PCS: new Set(),
+    guide7PCS: new Set(),
+    tensionPCS: new Set(),
+    qualityPCS: null,
+    charPCS: new Set([11]),
+  } : null;
 
   var activePCS, activeLabel, rootPC, bassPC = null;
   var charPCS = new Set();
@@ -1374,8 +1372,37 @@ function padComputeRenderState(opts) {
     qualityPCS: qualityPCS, avoidPCS: avoidPCS,
     overlayPCS: overlayPCS, overlayCharPCS: overlayCharPCS,
     tastyMidiSet: tastyMidiSet, tastyDegreeMap: tastyDegreeMap, tastyTopMidi: tastyTopMidi,
-    tastyPadPositions: tastyPadPositions
+    tastyPadPositions: tastyPadPositions,
+    padOverride: _padOverride  // C-fixed mode: applied only on pad + LED, not on staff/guitar/etc
   };
+}
+
+// Helper for pad/LED consumers: return a state where activePCS/rootPC etc are
+// swapped to C Major if padOverride is set. Staff/guitar/piano/info use the
+// raw state instead.
+function padApplyPadOverride(state) {
+  if (!state || !state.padOverride) return state;
+  var o = state.padOverride;
+  return Object.assign({}, state, {
+    activePCS: o.activePCS,
+    rootPC: o.rootPC,
+    bassPC: o.bassPC,
+    omittedPCS: o.omittedPCS,
+    guide3PCS: o.guide3PCS,
+    guide7PCS: o.guide7PCS,
+    tensionPCS: o.tensionPCS,
+    qualityPCS: o.qualityPCS,
+    charPCS: o.charPCS,
+    // Clear chord-specific overlays so Pad shows only the C Major scale surface
+    activeIvPCS: null,
+    overlayPCS: null,
+    overlayCharPCS: null,
+    tastyMidiSet: null,
+    tastyDegreeMap: null,
+    tastyTopMidi: null,
+    tastyPadPositions: null,
+    avoidPCS: new Set()
+  });
 }
 
 // Conditional exports for Node.js (Vitest) — ignored in browser
