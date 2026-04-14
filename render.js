@@ -1377,9 +1377,40 @@ function padComputeRenderState(opts) {
   };
 }
 
-// Helper for pad/LED consumers: return a state where activePCS/rootPC etc are
-// swapped to C Major if padOverride is set. Staff/guitar/piano/info use the
-// raw state instead.
+// Scale-only state for PUSH/Launchpad LED (urinami 2026-04-14):
+// PUSH is an instrument surface; it should always display only the current
+// scale, never chord/tasty/stock/builder overlays. Callers pass the full
+// state and the current key/scaleIdx; a C-Major state is returned when
+// padCFixed is on, otherwise the key-linked scale.
+function padApplyScaleOnlyOverride(state, key, scaleIdx, cFixed) {
+  var effKey = cFixed ? 0 : (typeof key === 'number' ? key : 0);
+  var effIdx = cFixed ? 0 : (typeof scaleIdx === 'number' ? scaleIdx : 0);
+  var scale = SCALES[effIdx];
+  if (!scale || scale.pcs.length !== 7) return state;
+  return Object.assign({}, state || {}, {
+    activePCS: new Set(scale.pcs.map(function(pc) { return (pc + effKey) % 12; })),
+    rootPC: effKey,
+    bassPC: null,
+    omittedPCS: new Set(),
+    guide3PCS: new Set(),
+    guide7PCS: new Set(),
+    tensionPCS: new Set(),
+    qualityPCS: null,
+    charPCS: scale.cn ? new Set(scale.cn.map(function(pc) { return (pc + effKey) % 12; })) : new Set(),
+    activeIvPCS: null,
+    overlayPCS: null,
+    overlayCharPCS: null,
+    tastyMidiSet: null,
+    tastyDegreeMap: null,
+    tastyTopMidi: null,
+    tastyPadPositions: null,
+    avoidPCS: new Set()
+  });
+}
+
+// Helper for pad consumers (SVG pad surface): return a state where
+// activePCS/rootPC etc are swapped to C Major if padOverride is set.
+// Staff/guitar/piano/info use the raw state instead.
 function padApplyPadOverride(state) {
   if (!state || !state.padOverride) return state;
   var o = state.padOverride;
