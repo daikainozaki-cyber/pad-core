@@ -79,10 +79,8 @@ const BUILDER_QUALITIES = [
 
 // ======== TENSION DEFINITIONS (Chord Builder Step 3) ========
 const TENSION_ROWS = [
-  // Row 0
+  // Row 0 — 2026-05-19: sus4 / sus2 を BUILDER_QUALITIES Row 4 (sus 系統) に集約、 Tension 行から削除
   [
-    {label:'sus4', mods:{replace3:5}},
-    {label:'sus2', mods:{replace3:2}},
     {label:'aug', mods:{sharp5:true}},
     {label:'6', mods:{add:[9]}},
     {label:'9', mods:{add:[2]}},

@@ -88,13 +88,19 @@ function padGenerateCandidates(input, memorySlots) {
         // Dedup by intervals (same voicing = same chord)
         var dedupKey = parsed.intervals.slice().sort(function(a,b){return a-b;}).join(',') +
                        ':' + (parsed.bass === null ? '' : parsed.bass);
-        if (!seenIntervals[dedupKey]) {
-          seenIntervals[dedupKey] = true;
+        // Major Triad (= empty quality '') is the short canonical form;
+        // never dedup it out, so "C" survives even when "Cmaj" was hit first.
+        // 2026-05-19 fix: テキスト入力 `C` で Major Triad が候補リストから消えるバグ修正。
+        var isEmptyQuality = qKey === '';
+        if (isEmptyQuality || !seenIntervals[dedupKey]) {
+          if (!isEmptyQuality) seenIntervals[dedupKey] = true;
           candidates.push({
             type: 'chord',
             name: parsed.displayName,
             quality: qKey,
-            exactMatch: qKey === qualityInput || qKey.toLowerCase() === qualityInput.toLowerCase(),
+            // Case-sensitive exactMatch: M and m are musically distinct
+            // (M = major, m = minor). 2026-05-19 fix: CM ≠ Cm.
+            exactMatch: qKey === qualityInput,
           });
         }
       }
