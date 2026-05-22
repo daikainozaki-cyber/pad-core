@@ -63,6 +63,13 @@ describe('padUpdateTensionVisibility', () => {
     expect(b9._hasClass('tension-uncommon')).toBe(true);
   });
 
+  it('hides b13 for min7', () => {
+    var min7 = { pcs: [0, 3, 7, 10] };
+    padUpdateTensionVisibility(btns, min7, padApplyTension);
+    var b13 = findBtn(btns, 'b13');
+    expect(b13._hasClass('quality-hidden')).toBe(true);
+  });
+
   it('does NOT dim b9 for dom7 (standard on dominant)', () => {
     var dom7 = { pcs: [0, 4, 7, 10] };
     padUpdateTensionVisibility(btns, dom7, padApplyTension);

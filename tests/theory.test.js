@@ -1053,6 +1053,11 @@ describe('padDetectChord', () => {
     it('G,C,E [67,72,76] \u2192 CMaj / G', () => {
       expect(hasMatch(padDetectChord([67, 72, 76]), 'CMaj / G')).toBe(true);
     });
+    it('B,G,A,D is Gadd9 / B, not Bm7(b13)', () => {
+      const results = padDetectChord([59, 67, 69, 74]);
+      expect(results[0].name).toBe('Gadd9 / B');
+      expect(results.some(r => r.name.indexOf('Bm7(b13)') >= 0)).toBe(false);
+    });
   });
 
   describe('edge cases', () => {

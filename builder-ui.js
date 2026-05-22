@@ -228,6 +228,7 @@ function padUpdateTensionVisibility(btns, quality, applyTensionFn, opts) {
         if (m.sharp5 || m.flat5) { btn.classList.add('tension-uncommon'); return; }
         if (m.add) {
           if (isMM7 && m.add.indexOf(6) >= 0) { btn.classList.add('quality-hidden'); return; }
+          if (isMinor && !isDim7 && m.add.indexOf(8) >= 0) { btn.classList.add('quality-hidden'); return; }
           for (var i = 0; i < m.add.length; i++) {
             if (m.add[i] === 1 || m.add[i] === 3) { btn.classList.add('tension-uncommon'); return; }
             if (m.add[i] === 8 && !isDim7) { btn.classList.add('tension-uncommon'); return; }

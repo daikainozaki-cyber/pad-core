@@ -437,7 +437,7 @@ function padBuildChordDetectDB() {
   addGeneratedTensionChords('m7', [0,3,7,10], [
     ['b9','9'],
     ['11'],
-    ['b13','13']
+    ['13']
   ]);
   addGeneratedTensionChords('Maj7', [0,4,7,11], [
     ['9'],

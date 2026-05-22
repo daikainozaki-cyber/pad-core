@@ -1444,6 +1444,12 @@ function padHasBassShell(pcs, bassPC) {
   return (intervals[3] || intervals[4]) && (intervals[10] || intervals[11]);
 }
 
+function padRejectMinorSeventhFlat13(chordName, intervals) {
+  return /^m7/.test(chordName || '')
+    && (chordName || '').indexOf('b5') < 0
+    && intervals[8];
+}
+
 function padDetectChord(midiNotes, spellingKey) {
   if (midiNotes.length < 2) return [];
   var pcs = [];
@@ -1478,6 +1484,7 @@ function padDetectChord(midiNotes, spellingKey) {
           if (intervals[chord.pcs[k]]) matched++;
         }
         if (matched === chord.pcs.length) {
+          if (padRejectMinorSeventhFlat13(chord.name, intervals)) continue;
           var extra = pcs.length - chord.pcs.length;
           var isRootPosition = rootPC === lowestPC;
           var score = (isRootPosition ? 100 : 0) + chord.pcs.length * 10 - extra + padShellScoreBonus(intervals);
@@ -1502,6 +1509,7 @@ function padDetectChord(midiNotes, spellingKey) {
             if (intervals[omit5pcs[k]]) matched++;
           }
           if (matched === omit5pcs.length) {
+            if (padRejectMinorSeventhFlat13(chord.name, intervals)) continue;
             var extra = pcs.length - omit5pcs.length;
             var isRootPosition = rootPC === lowestPC;
             var rootBonus = (isRootPosition && extra === 0) ? 100 : 0;
