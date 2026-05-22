@@ -51,19 +51,8 @@ describe('padUpdateTensionVisibility', () => {
     expect(six._hasClass('quality-hidden')).toBe(true);
   });
 
-  // Category F: sus4 only for dominant 7
-  it('hides sus4 for maj7 (not dominant)', () => {
-    var maj7 = { pcs: [0, 4, 7, 11] };
-    padUpdateTensionVisibility(btns, maj7, padApplyTension);
-    var sus = findBtn(btns, 'sus4');
-    expect(sus._hasClass('quality-hidden')).toBe(true);
-  });
-
-  it('shows sus4 for dom7', () => {
-    var dom7 = { pcs: [0, 4, 7, 10] };
-    padUpdateTensionVisibility(btns, dom7, padApplyTension);
-    var sus = findBtn(btns, 'sus4');
-    expect(sus._hasClass('quality-hidden')).toBe(false);
+  it('does not include sus4 in the tension row', () => {
+    expect(findBtn(btns, 'sus4')).toBeUndefined();
   });
 
   // Category G: Non-dominant 7th dims altered tensions

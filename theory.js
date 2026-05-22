@@ -1417,7 +1417,34 @@ function padAssignFingers(frets) {
 // Detect chord name from MIDI notes. Returns array of {name, rootPC, score} sorted by score.
 // Uses CHORD_DETECT_DB, TRIAD_DETECT_DB, TETRAD_DETECT_DB from data.js.
 
-function padDetectChord(midiNotes) {
+function padChordIntervalNoteName(rootPC, notePC) {
+  var interval = ((notePC - rootPC) + 12) % 12;
+  return (interval === 1 || interval === 3 || interval === 6 || interval === 8 || interval === 10)
+    ? NOTE_NAMES_FLAT[notePC]
+    : NOTE_NAMES_SHARP[notePC];
+}
+
+function padPreferredRootNoteName(pc, spellingKey) {
+  var key = spellingKey;
+  if (key === null || key === undefined) key = 0;
+  return (KEY_SPELLINGS[key] || NOTE_NAMES_FLAT)[pc];
+}
+
+function padShellScoreBonus(intervals) {
+  var hasThird = intervals[3] || intervals[4];
+  var hasSeventh = intervals[10] || intervals[11];
+  if (hasThird && hasSeventh) return 80;
+  if (hasThird) return 20;
+  return 0;
+}
+
+function padHasBassShell(pcs, bassPC) {
+  var intervals = {};
+  for (var i = 0; i < pcs.length; i++) intervals[((pcs[i] - bassPC) + 12) % 12] = true;
+  return (intervals[3] || intervals[4]) && (intervals[10] || intervals[11]);
+}
+
+function padDetectChord(midiNotes, spellingKey) {
   if (midiNotes.length < 2) return [];
   var pcs = [];
   var seen = {};
@@ -1434,6 +1461,7 @@ function padDetectChord(midiNotes) {
   lowestPC = lowestPC % 12;
   var candidates = [];
   var seenNames = {};
+  var lowestHasShell = padHasBassShell(pcs, lowestPC);
 
   for (var ri = 0; ri < pcs.length; ri++) {
     var rootPC = pcs[ri];
@@ -1452,9 +1480,9 @@ function padDetectChord(midiNotes) {
         if (matched === chord.pcs.length) {
           var extra = pcs.length - chord.pcs.length;
           var isRootPosition = rootPC === lowestPC;
-          var score = (isRootPosition ? 100 : 0) + chord.pcs.length * 10 - extra;
-          var rootName = NOTE_NAMES_SHARP[rootPC];
-          var bass = lowestPC !== rootPC ? ' / ' + NOTE_NAMES_SHARP[lowestPC] : '';
+          var score = (isRootPosition ? 100 : 0) + chord.pcs.length * 10 - extra + padShellScoreBonus(intervals);
+          var rootName = padPreferredRootNoteName(rootPC, spellingKey);
+          var bass = lowestPC !== rootPC ? ' / ' + padChordIntervalNoteName(rootPC, lowestPC) : '';
           var name = rootName + chord.name + bass;
           if (!seenNames[name]) {
             seenNames[name] = true;
@@ -1476,10 +1504,13 @@ function padDetectChord(midiNotes) {
           if (matched === omit5pcs.length) {
             var extra = pcs.length - omit5pcs.length;
             var isRootPosition = rootPC === lowestPC;
-            var score = (isRootPosition ? 100 : 0) + chord.pcs.length * 10 - extra - 5;
-            var rootName = NOTE_NAMES_SHARP[rootPC];
-            var bass = lowestPC !== rootPC ? ' / ' + NOTE_NAMES_SHARP[lowestPC] : '';
-            var omitLabel = chord.pcs.length >= 5 ? '' : '(omit5)';
+            var rootBonus = (isRootPosition && extra === 0) ? 100 : 0;
+            var extraPenalty = extra > 0 ? extra * 35 : 0;
+            var score = rootBonus + chord.pcs.length * 10 - extra - 5 - extraPenalty + padShellScoreBonus(intervals);
+            var rootName = padPreferredRootNoteName(rootPC, spellingKey);
+            var bass = lowestPC !== rootPC ? ' / ' + padChordIntervalNoteName(rootPC, lowestPC) : '';
+            var hasShell = (intervals[3] || intervals[4]) && (intervals[10] || intervals[11]);
+            var omitLabel = (chord.pcs.length >= 5 || hasShell) ? '' : '(omit5)';
             var name = rootName + chord.name + omitLabel + bass;
             if (!seenNames[name]) {
               seenNames[name] = true;
@@ -1511,13 +1542,14 @@ function padDetectChord(midiNotes) {
             if (triadIntervals[triad.pcs[k]]) matched++;
           }
           if (matched === triad.pcs.length) {
-            var triadName = NOTE_NAMES_SHARP[triadRoot] + (triad.name === 'Maj' ? '' : triad.name);
-            var bassName = NOTE_NAMES_SHARP[lowestPC];
+            var triadName = padPreferredRootNoteName(triadRoot, spellingKey) + (triad.name === 'Maj' ? '' : triad.name);
+            var bassName = padChordIntervalNoteName(triadRoot, lowestPC);
             var name = triadName + ' / ' + bassName;
-            if (!seenNames[name]) {
+            var isTriadRoot = triadRoot === lowestPC;
+            var isB7OverBassHybrid = ((triadRoot - lowestPC + 12) % 12) === 10;
+            if (!(lowestHasShell && isB7OverBassHybrid) && !seenNames[name]) {
               seenNames[name] = true;
-              var isTriadRoot = triadRoot === lowestPC;
-              var score = (isTriadRoot ? 100 : 0) + 25;
+              var score = isTriadRoot ? 125 : (isB7OverBassHybrid ? 144 : 25);
               candidates.push({ name: name, rootPC: triadRoot, score: score });
             }
           }
@@ -1525,6 +1557,49 @@ function padDetectChord(midiNotes) {
       }
     }
   }
+
+  // Some b7-over-bass upper-structure triads (especially minor triads like Fm/G)
+  // can be swallowed by richer exact matches. Keep the hybrid spelling visible
+  // because players commonly think and write these as slash chords.
+  if (pcs.length >= 4 && !lowestHasShell) {
+    var hybridRoot = (lowestPC + 10) % 12;
+    var hybridUpperSet = {};
+    for (var hi = 0; hi < pcs.length; hi++) {
+      if (pcs[hi] !== lowestPC) hybridUpperSet[pcs[hi]] = true;
+    }
+    [
+      { suffix: '', third: 4 },
+      { suffix: 'm', third: 3 }
+    ].forEach(function(hybridQuality) {
+      var rootPC2 = hybridRoot;
+      var thirdPC = (hybridRoot + hybridQuality.third) % 12;
+      var fifthPC = (hybridRoot + 7) % 12;
+      if (hybridUpperSet[rootPC2] && hybridUpperSet[thirdPC] && hybridUpperSet[fifthPC]) {
+        var hybridName = padPreferredRootNoteName(hybridRoot, spellingKey) + hybridQuality.suffix + ' / ' + padChordIntervalNoteName(hybridRoot, lowestPC);
+        var hybridAlreadyListed = candidates.some(function(c) { return c.name === hybridName; });
+        if (!hybridAlreadyListed) {
+          seenNames[hybridName] = true;
+          candidates.push({ name: hybridName, rootPC: hybridRoot, score: 144 });
+        }
+      }
+    });
+  }
+  var bassIntervalsForHybrid = {};
+  for (var bhi = 0; bhi < pcs.length; bhi++) {
+    bassIntervalsForHybrid[((pcs[bhi] - lowestPC) + 12) % 12] = true;
+  }
+  function ensureB7HybridFromBass(suffix, thirdFromBass) {
+    if (lowestHasShell) return;
+    if (!bassIntervalsForHybrid[10] || !bassIntervalsForHybrid[5] || !bassIntervalsForHybrid[thirdFromBass]) return;
+    var rootPC3 = (lowestPC + 10) % 12;
+    var name3 = padPreferredRootNoteName(rootPC3, spellingKey) + suffix + ' / ' + padChordIntervalNoteName(rootPC3, lowestPC);
+    if (!candidates.some(function(c) { return c.name === name3; })) {
+      seenNames[name3] = true;
+      candidates.push({ name: name3, rootPC: rootPC3, score: 144 });
+    }
+  }
+  ensureB7HybridFromBass('', 2);
+  ensureB7HybridFromBass('m', 1);
 
   // Bass + Tetrad detection
   if (pcs.length >= 4) {
@@ -1546,8 +1621,8 @@ function padDetectChord(midiNotes) {
             if (tetIntervals[tet.pcs[k]]) matched++;
           }
           if (matched === tet.pcs.length) {
-            var tetName = NOTE_NAMES_SHARP[tetRoot] + tet.name;
-            var bassName = NOTE_NAMES_SHARP[lowestPC];
+            var tetName = padPreferredRootNoteName(tetRoot, spellingKey) + tet.name;
+            var bassName = padChordIntervalNoteName(tetRoot, lowestPC);
             if (tetRoot === lowestPC) continue;
             var name = tetName + ' / ' + bassName;
             if (!seenNames[name]) {
@@ -1571,7 +1646,7 @@ function padDetectChord(midiNotes) {
     var has7th = rootIntervals[10] || rootIntervals[11];
     if (has7th) {
       var is7 = rootIntervals[10];
-      var sfx = is7 ? '7' : '△7';
+      var sfx = is7 ? '7' : 'Maj7';
       c.name = c.name.replace(/^([A-G]#?)6\/9(\(omit5\))?/, '$1' + sfx + '(9,13)');
       c.name = c.name.replace(/^([A-G]#?)m6\/9(\(omit5\))?/, '$1m' + sfx + '(9,13)');
       c.name = c.name.replace(/^([A-G]#?)6(\(omit5\))?/, '$1' + sfx + '(13)');
@@ -1580,6 +1655,20 @@ function padDetectChord(midiNotes) {
   }
 
   candidates.sort(function(a, b) { return b.score - a.score; });
+  function pinB7HybridNearTop(suffix, thirdFromBass) {
+    if (lowestHasShell) return;
+    var bassIntervals = {};
+    for (var pi = 0; pi < pcs.length; pi++) bassIntervals[((pcs[pi] - lowestPC) + 12) % 12] = true;
+    if (!bassIntervals[10] || !bassIntervals[5] || !bassIntervals[thirdFromBass]) return;
+    var root = (lowestPC + 10) % 12;
+    var pinnedName = padPreferredRootNoteName(root, spellingKey) + suffix + ' / ' + padChordIntervalNoteName(root, lowestPC);
+    var existingIdx = candidates.findIndex(function(c) { return c.name === pinnedName; });
+    var pinned = existingIdx >= 0 ? candidates.splice(existingIdx, 1)[0] : { name: pinnedName, rootPC: root, score: 144 };
+    pinned.score = Math.max(pinned.score || 0, 144);
+    candidates.splice(Math.min(1, candidates.length), 0, pinned);
+  }
+  pinB7HybridNearTop('', 2);
+  pinB7HybridNearTop('m', 1);
   return candidates.slice(0, 8);
 }
 

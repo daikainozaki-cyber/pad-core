@@ -128,7 +128,7 @@ describe('padParseChordName', () => {
     expect(r).not.toBeNull();
     expect(r.root).toBe(5);
     expect(r.intervals).toEqual([0, 3, 7, 11]);
-    expect(r.displayName).toBe('Fm\u25B37');
+    expect(r.displayName).toBe('FmMaj7');
   });
 
   it('parses CmM7 (minor-major-7 short form)', () => {
@@ -136,7 +136,7 @@ describe('padParseChordName', () => {
     expect(r).not.toBeNull();
     expect(r.root).toBe(0);
     expect(r.intervals).toEqual([0, 3, 7, 11]);
-    expect(r.displayName).toBe('Cm\u25B37');
+    expect(r.displayName).toBe('CmMaj7');
   });
 });
 
@@ -343,10 +343,10 @@ describe('padGetDiatonicTetrads', () => {
   it('C Major diatonic tetrads have correct qualities', () => {
     const tetrads = padGetDiatonicTetrads(SCALES[0].pcs, 0);
     const names = tetrads.map(t => t.quality.name);
-    expect(names[0]).toBe('\u25B37');
+    expect(names[0]).toBe('Maj7');
     expect(names[1]).toBe('m7');
     expect(names[2]).toBe('m7');
-    expect(names[3]).toBe('\u25B37');
+    expect(names[3]).toBe('Maj7');
     expect(names[4]).toBe('7');
     expect(names[5]).toBe('m7');
     expect(names[6]).toBe('m7(b5)');
@@ -1023,8 +1023,8 @@ describe('padDetectChord', () => {
     it('Cm7 [60,63,67,70]', () => {
       expect(padDetectChord([60, 63, 67, 70])[0].name).toBe('Cm7');
     });
-    it('C\u25B37 [60,64,67,71]', () => {
-      expect(padDetectChord([60, 64, 67, 71])[0].name).toBe('C\u25B37');
+    it('CMaj7 [60,64,67,71]', () => {
+      expect(padDetectChord([60, 64, 67, 71])[0].name).toBe('CMaj7');
     });
     it('C7 [60,64,67,70]', () => {
       expect(padDetectChord([60, 64, 67, 70])[0].name).toBe('C7');
@@ -1041,8 +1041,8 @@ describe('padDetectChord', () => {
     it('C7(9) [60,64,67,70,74]', () => {
       expect(hasMatch(padDetectChord([60, 64, 67, 70, 74]), 'C7(9)')).toBe(true);
     });
-    it('C\u25B37(9) [60,64,67,71,74]', () => {
-      expect(hasMatch(padDetectChord([60, 64, 67, 71, 74]), 'C\u25B37(9)')).toBe(true);
+    it('CMaj7(9) [60,64,67,71,74]', () => {
+      expect(hasMatch(padDetectChord([60, 64, 67, 71, 74]), 'CMaj7(9)')).toBe(true);
     });
   });
 

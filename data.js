@@ -74,7 +74,7 @@ const BUILDER_QUALITIES = [
   // Row 2
   [{name:'7', label:'7', pcs:[0,4,7,10]}, {name:'m7', label:'m7', pcs:[0,3,7,10]}, {name:'dim7', label:'dim7', pcs:[0,3,6,9]}],
   // Row 3
-  [{name:'\u25B37', label:'\u25B37', pcs:[0,4,7,11]}, {name:'m\u25B37', label:'m\u25B37', pcs:[0,3,7,11]}, {name:'aug', label:'aug', pcs:[0,4,8]}],
+  [{name:'Maj7', label:'Maj7', pcs:[0,4,7,11]}, {name:'mMaj7', label:'mMaj7', pcs:[0,3,7,11]}, {name:'aug', label:'aug', pcs:[0,4,8]}],
 ];
 
 // ======== TENSION DEFINITIONS (Chord Builder Step 3) ========
@@ -291,6 +291,7 @@ var PAD_QUALITY_INTERVALS = {
   // Short forms
   'mMaj7': [0, 3, 7, 11],
   'mM7':  [0, 3, 7, 11],
+  '6/9(#11)': [0, 4, 7, 9, 14, 18],
   '6/9':  [0, 4, 7, 9, 14],
   '7#9':  [0, 4, 7, 10, 15],
   '7b9':  [0, 4, 7, 10, 13],
@@ -335,8 +336,10 @@ var PAD_QUALITY_DISPLAY = {
   '\u00F8': 'm7b5',  // ø
   '\u00B0': 'dim',   // °
   'M7':  'maj7',
-  'mMaj7': 'm\u25B37',  // mMaj7 → m△7
-  'mM7': 'm\u25B37',    // mM7 → m△7
+  '\u25B37': 'Maj7',
+  'm\u25B37': 'mMaj7',
+  'mMaj7': 'mMaj7',
+  'mM7': 'mMaj7',
 };
 
 // ======== PAD GRID CONSTANTS ========
@@ -397,12 +400,63 @@ function padBuildChordDetectDB() {
     if (!q) return;
     db.push({ name: q.name || 'Maj', pcs: q.pcs, pcsSet: new Set(q.pcs) });
   });
+
+  function addGeneratedTensionChords(baseName, basePcs, groups) {
+    function search(groupIdx, picked) {
+      if (groupIdx === groups.length) {
+        if (picked.length === 0) return;
+        var pcs = basePcs.slice();
+        picked.forEach(function(label) {
+          var pc = TENSION_NAME_TO_PC[label];
+          if (pc !== undefined && pcs.indexOf(pc) < 0) pcs.push(pc);
+        });
+        db.push({
+          name: baseName + '(' + picked.join(',') + ')',
+          pcs: pcs,
+          pcsSet: new Set(pcs)
+        });
+        return;
+      }
+
+      search(groupIdx + 1, picked);
+      groups[groupIdx].forEach(function(label) {
+        search(groupIdx + 1, picked.concat([label]));
+      });
+    }
+
+    search(0, []);
+  }
+
+  // Generate 1-3 tension combinations so detection keeps up with article-use
+  // voicings such as C7(b9,#11,13), C7(#9,#11,b13), Cm7(9,11,13).
+  addGeneratedTensionChords('7', [0,4,7,10], [
+    ['b9','9','#9'],
+    ['11','#11'],
+    ['b13','13']
+  ]);
+  addGeneratedTensionChords('m7', [0,3,7,10], [
+    ['b9','9'],
+    ['11'],
+    ['b13','13']
+  ]);
+  addGeneratedTensionChords('Maj7', [0,4,7,11], [
+    ['9'],
+    ['#11'],
+    ['13']
+  ]);
+  addGeneratedTensionChords('m7(b5)', [0,3,6,10], [
+    ['9'],
+    ['11'],
+    ['b13']
+  ]);
+
   var tensionChords = [
     // 9th chords
     { name: '7(9)', pcs: [0,4,7,10,2] },
     { name: 'm7(9)', pcs: [0,3,7,10,2] },
-    { name: '△7(9)', pcs: [0,4,7,11,2] },
+    { name: 'Maj7(9)', pcs: [0,4,7,11,2] },
     { name: '6/9', pcs: [0,4,7,9,2] },
+    { name: '6/9(#11)', pcs: [0,4,7,9,2,6] },
     { name: 'm6/9', pcs: [0,3,7,9,2] },
     { name: '7(b9)', pcs: [0,4,7,10,1] },
     { name: '7(#9)', pcs: [0,4,7,10,3] },
@@ -410,12 +464,12 @@ function padBuildChordDetectDB() {
     // 11th chords
     { name: '7(9,11)', pcs: [0,4,7,10,2,5] },
     { name: 'm7(9,11)', pcs: [0,3,7,10,2,5] },
-    { name: '△7(9,#11)', pcs: [0,4,7,11,2,6] },
+    { name: 'Maj7(9,#11)', pcs: [0,4,7,11,2,6] },
     { name: '7(#11)', pcs: [0,4,7,10,6] },
     // 13th chords
     { name: '7(9,13)', pcs: [0,4,7,10,2,9] },
     { name: 'm7(9,13)', pcs: [0,3,7,10,2,9] },
-    { name: '△7(9,13)', pcs: [0,4,7,11,2,9] },
+    { name: 'Maj7(9,13)', pcs: [0,4,7,11,2,9] },
     { name: '7(b13)', pcs: [0,4,7,10,8] },
     // Combined tensions
     { name: '7(9,#11)', pcs: [0,4,7,10,2,6] },
@@ -441,12 +495,12 @@ function padBuildChordDetectDB() {
     // Compact tension voicings (no 5th)
     { name: '7(13)', pcs: [0,4,10,9] },
     { name: 'm7(13)', pcs: [0,3,10,9] },
-    { name: '△7(13)', pcs: [0,4,11,9] },
+    { name: 'Maj7(13)', pcs: [0,4,11,9] },
     { name: '7(11)', pcs: [0,4,10,5] },
     { name: 'm7(11)', pcs: [0,3,10,5] },
     { name: '7(9)', pcs: [0,4,10,2] },
     { name: 'm7(9)', pcs: [0,3,10,2] },
-    { name: '△7(9)', pcs: [0,4,11,2] },
+    { name: 'Maj7(9)', pcs: [0,4,11,2] },
     // sus chords
     { name: 'sus4', pcs: [0,5,7] },
     { name: 'sus2', pcs: [0,2,7] },
@@ -478,10 +532,10 @@ var TRIAD_DETECT_DB = [
 ];
 
 var TETRAD_DETECT_DB = [
-  { name: '△7', pcs: [0,4,7,11] },
+  { name: 'Maj7', pcs: [0,4,7,11] },
   { name: '7', pcs: [0,4,7,10] },
   { name: 'm7', pcs: [0,3,7,10] },
-  { name: 'm△7', pcs: [0,3,7,11] },
+  { name: 'mMaj7', pcs: [0,3,7,11] },
   { name: 'm7(b5)', pcs: [0,3,6,10] },
   { name: 'dim7', pcs: [0,3,6,9] },
   { name: '6', pcs: [0,4,7,9] },
