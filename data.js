@@ -591,6 +591,7 @@ var PAD_GUITAR_REFERENCE_FORMS = {
     "10|0,4,7,10": ["13131x","667686","a9a88x","xbdcdx"],
     "10|0,4,7,11": ["13231x","5333xx","667786","aaa88x"],
     "11|0,3,6,10": ["x3232x","x677x7","7a7987","aaa9xx"],
+    "11|0,4,7,10": ["20212x"],
     "1|0,3,7": ["x2124x","456644","9x6679","999bb9"],
     "1|0,3,7,10": ["x999x9","45464x","7566xx","9999b9","ccdbxx"],
     "2|0,2,7": ["0320xx","5322xx","557755","aa777x"],
@@ -607,6 +608,8 @@ var PAD_GUITAR_REFERENCE_FORMS = {
     "4|0,4,7": ["001220","4542xx","45467x","79997x"],
     "4|0,4,7,10": ["001020","x5767x","797977","a999xx"],
     "4|0,4,7,10,13": ["101020","464050","76767x","xxacbc"],
+    "4|0,5,7": ["002220"],
+    "4|0,5,7,10": ["002020","032220"],
     "5|0,4,7": ["112331","1123xx","5653xx","56578x","8aaa8x"],
     "5|0,4,7,10": ["112131","54533x","8a8a88","baaaxx"],
     "5|0,4,7,11": ["0123xx","112231","55533x","8a9a88"],
@@ -637,6 +640,84 @@ var PAD_GUITAR_REFERENCE_FORMS = {
   }
 };
 
+// ======== GUITAR FORM KNOWLEDGE ========
+// Human-playability metadata layered on top of raw chord shapes.
+// String indexes and finger arrays use pad-core order: high E = 0, low E = 5.
+// The fret key format is the same as PAD_GUITAR_REFERENCE_FORMS.
+var PAD_GUITAR_POSITION_FAMILIES = [
+  { id: 'jazz-pos-1', label: 'Position 1', minFret: 0, maxFret: 3, source: 'Jazz Code Connection: major diatonic 7th five-position system' },
+  { id: 'jazz-pos-2', label: 'Position 2', minFret: 3, maxFret: 5, source: 'Jazz Code Connection: major diatonic 7th five-position system' },
+  { id: 'jazz-pos-3', label: 'Position 3', minFret: 5, maxFret: 9, source: 'Jazz Code Connection: major diatonic 7th five-position system' },
+  { id: 'jazz-pos-4', label: 'Position 4', minFret: 7, maxFret: 10, source: 'Jazz Code Connection: major diatonic 7th five-position system' },
+  { id: 'jazz-pos-5', label: 'Position 5', minFret: 10, maxFret: 13, source: 'Jazz Code Connection: major diatonic 7th five-position system' },
+];
+
+var PAD_GUITAR_FORM_KNOWLEDGE = {
+  "standard": {
+    "9|0,4,7,10": {
+      "02020x": {
+        movable: false,
+        rankBonus: 60,
+        styleTags: ["folk-open", "blues-open"],
+        fingerings: [
+          { id: "human-2026-05-25", fingers: [0, 3, 0, 2, 0, null], barre: null, note: "A7 open grip can use fingers 2 and 3." }
+        ],
+        mutes: [
+          { string: 5, actor: "thumb", hand: "fretting", context: "folk/blues", note: "Mute the 6th string with the fretting-hand thumb." }
+        ]
+      }
+    },
+    "11|0,4,7,10": {
+      "20212x": {
+        movable: false,
+        rankBonus: 120,
+        styleTags: ["folk-open", "blues-open"],
+        fingerings: [
+          { id: "human-2026-05-25", fingers: [4, 0, 3, 2, 1, null], barre: null, note: "B7 open grip: A string 1, D string 2, G string 3, high E string 4." }
+        ],
+        mutes: [
+          { string: 5, actor: "middle", hand: "fretting", context: "open B7", note: "Mute the 6th string with the middle finger." }
+        ]
+      }
+    },
+    "4|0,5,7": {
+      "002220": {
+        movable: false,
+        rankBonus: 90,
+        styleTags: ["folk-open", "blues-open", "sus-resolution"],
+        nonBarre: true,
+        fingerings: [
+          { id: "human-2026-05-25-a", fingers: [0, 0, 3, 2, 1, 0], barre: null, note: "Esus4 open grip, not a barre: fingers 1,2,3 from the 5th string side." },
+          { id: "human-2026-05-25-b", fingers: [0, 0, 4, 3, 2, 0], barre: null, note: "Alternative Esus4 open grip: fingers 2,3,4 from the 5th string side." }
+        ],
+        mutes: []
+      }
+    },
+    "4|0,5,7,10": {
+      "002020": {
+        movable: false,
+        rankBonus: 70,
+        styleTags: ["folk-open", "blues-open", "sus-resolution"],
+        nonBarre: true,
+        fingerings: [
+          { id: "human-2026-05-25", fingers: [0, 0, 2, 0, 1, 0], barre: null, note: "E7sus open grip, not a broken barre; separated fingers around the open D string." }
+        ],
+        mutes: []
+      },
+      "032220": {
+        movable: false,
+        rankBonus: 80,
+        styleTags: ["folk-open", "blues-open", "sus-resolution"],
+        nonBarre: true,
+        fingerings: [
+          { id: "human-2026-05-25", fingers: [0, 4, 3, 2, 1, 0], barre: null, note: "E7sus open grip, not a barre; the 2nd-fret group uses separate fingers." }
+        ],
+        mutes: []
+      }
+    }
+  }
+};
+
 // Conditional exports for Node.js (Vitest) — ignored in browser
 if (typeof module !== 'undefined') module.exports = {
   NOTE_NAMES_SHARP, NOTE_NAMES_FLAT, FLAT_MAJOR_KEYS,
@@ -648,5 +729,5 @@ if (typeof module !== 'undefined') module.exports = {
   PAD_INST_COLORS, PAD_GUITAR_TUNING, PAD_GUITAR_NAMES, PAD_BASS_TUNING, PAD_BASS_NAMES,
   padBuildChordDetectDB, CHORD_DETECT_DB, TRIAD_DETECT_DB, TETRAD_DETECT_DB,
   PAD_THEME_OKABE_ITO,
-  PAD_GUITAR_REFERENCE_FORMS,
+  PAD_GUITAR_REFERENCE_FORMS, PAD_GUITAR_POSITION_FAMILIES, PAD_GUITAR_FORM_KNOWLEDGE,
 };

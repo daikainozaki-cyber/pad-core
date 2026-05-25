@@ -671,6 +671,7 @@ function padRenderFretboard(svg, opts) {
  *     pcsSet:       Set       - active pitch classes (default: empty)
  *     bassPC:       number|null - bass note PC
  *     renderState:  Object    - { guide3PCS, guide7PCS, tensionPCS, avoidPCS, charPCS }
+ *     activeMidiSet:Set|null  - when set, only these exact MIDI notes are highlighted
  *     overlayPCS:   Set|null  - overlay scale PCS
  *     overlayCharPCS: Set|null - characteristic notes in overlay
  *     chordMode:    boolean   - true = chord mode (guide tones), false = scale mode (char notes)
@@ -699,6 +700,7 @@ function padRenderPiano(svg, opts) {
   var numOctaves = o.numOctaves || 4;
   var startMidi = o.startMidi != null ? o.startMidi : 48;
   var selectedNotes = o.selectedNotes || new Set();
+  var activeMidiSet = o.activeMidiSet || null;
   var solo = o.solo || false;
   var W = o.width || 564;
   var mobile = o.isMobile || false;
@@ -746,15 +748,16 @@ function padRenderPiano(svg, opts) {
 
   // Default color logic (used when keyColorFn is not provided)
   function defaultKeyColor(pc, isWhite, midi) {
-    var isActive = pcsSet.has(pc);
-    var isRoot = rootPC >= 0 && pc === rootPC;
-    var isBass = bassPC !== null && pc === bassPC && !isRoot;
-    var isChar = !chordMode && charPCS.has(pc) && !isRoot;
-    var isGuide3 = chordMode && guide3.has(pc) && !isRoot && !tp.has(pc);
-    var isGuide7 = chordMode && guide7.has(pc) && !isRoot && !tp.has(pc);
-    var isTension = chordMode && tp.has(pc) && !isRoot && !isGuide3 && !isGuide7;
-    var isAvoid = chordMode && av.has(pc) && !isRoot;
-    var isOvl = !chordMode && !isActive && !isRoot && !isBass && ovlPCS && ovlPCS.has(pc);
+    var inMidiScope = !activeMidiSet || activeMidiSet.has(midi);
+    var isActive = inMidiScope && pcsSet.has(pc);
+    var isRoot = inMidiScope && rootPC >= 0 && pc === rootPC;
+    var isBass = inMidiScope && bassPC !== null && pc === bassPC && !isRoot;
+    var isChar = inMidiScope && !chordMode && charPCS.has(pc) && !isRoot;
+    var isGuide3 = inMidiScope && chordMode && guide3.has(pc) && !isRoot && !tp.has(pc);
+    var isGuide7 = inMidiScope && chordMode && guide7.has(pc) && !isRoot && !tp.has(pc);
+    var isTension = inMidiScope && chordMode && tp.has(pc) && !isRoot && !isGuide3 && !isGuide7;
+    var isAvoid = inMidiScope && chordMode && av.has(pc) && !isRoot;
+    var isOvl = inMidiScope && !chordMode && !isActive && !isRoot && !isBass && ovlPCS && ovlPCS.has(pc);
     var isOvlChar = isOvl && ovlCharPCS && ovlCharPCS.has(pc);
     var baseOff = isWhite ? '#eee' : '#222';
     var fill, textColor, opacity = 1;
@@ -1169,12 +1172,14 @@ function padComputeRenderState(opts) {
   var noRootLabel = o.noRootLabel || '...';
 
   // C-fixed mode (urinami "Pad OS" philosophy, 2026-04-14):
-  // Pad/LED だけを C Major に固定する override を state に埋め込む。
+  // Scale mode の pad/LED だけを C Major に固定する override を state に埋め込む。
+  // Chord mode でこれを適用すると Cm7(9) などのスケール外コード音が消えるため、
+  // コード表示は常にコード音を優先する。
   // staff/guitar/bass/piano/info などは通常どおり key 連動で描画させるため、
   // early return ではなく state.padOverride として分離する。
   // Codex P1 fix (2026-04-14): 早期 return だと共有 render state を壊すので、
   // 呼び出し側（renderPads / updateLaunchpadLEDs）が padOverride を見る設計に。
-  var _padOverride = (o.cFixed && mode !== 'input') ? {
+  var _padOverride = (o.cFixed && mode === 'scale') ? {
     activePCS: new Set([0, 2, 4, 5, 7, 9, 11]),
     rootPC: 0,
     bassPC: null,
@@ -1227,6 +1232,13 @@ function padComputeRenderState(opts) {
       builderPCS.filter(function(pc) { return pc >= 12; }).forEach(function(pc) {
         tensionPCS.add((pc + rootPC) % 12);
       });
+      if (qualityPCS) {
+        var qualityIvSet = new Set(qualityPCS.map(function(pc) { return pc % 12; }));
+        builderPCS.forEach(function(pc) {
+          var iv = pc % 12;
+          if (iv !== 0 && !qualityIvSet.has(iv)) tensionPCS.add((pc + rootPC) % 12);
+        });
+      }
       activeLabel = chordName;
       if (builderBass !== null) bassPC = builderBass;
       // Voicing modifications
@@ -1259,10 +1271,10 @@ function padComputeRenderState(opts) {
         });
       }
       // Guide tones
-      [3, 4].forEach(function(iv) { var pc = (rootPC + iv) % 12; if (activePCS.has(pc)) guide3PCS.add(pc); });
-      [10, 11].forEach(function(iv) { var pc = (rootPC + iv) % 12; if (activePCS.has(pc)) guide7PCS.add(pc); });
+      [3, 4].forEach(function(iv) { var pc = (rootPC + iv) % 12; if (activePCS.has(pc) && !tensionPCS.has(pc)) guide3PCS.add(pc); });
+      [10, 11].forEach(function(iv) { var pc = (rootPC + iv) % 12; if (activePCS.has(pc) && !tensionPCS.has(pc)) guide7PCS.add(pc); });
       if (qualityPCS && qualityPCS.includes(9) && !qualityPCS.includes(10) && !qualityPCS.includes(11)) {
-        var pc6 = (rootPC + 9) % 12; if (activePCS.has(pc6)) guide7PCS.add(pc6);
+        var pc6 = (rootPC + 9) % 12; if (activePCS.has(pc6) && !tensionPCS.has(pc6)) guide7PCS.add(pc6);
       }
     } else {
       activePCS = new Set();
@@ -1443,4 +1455,5 @@ if (typeof module !== 'undefined') module.exports = {
   padRenderGrid, padDrawBoxes, padRenderFretboard, padRenderPiano,
   padMidiToStaffPos, padDegreeAwareStaffPos, padRenderStaff,
   padComputeRenderState,
+  padApplyScaleOnlyOverride, padApplyPadOverride,
 };

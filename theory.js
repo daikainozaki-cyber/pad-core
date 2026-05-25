@@ -730,6 +730,151 @@ function padFindParentScales(rootPC, chordIntervals, currentKey) {
 
 // ======== GUITAR/BASS CHORD FORM ENUMERATION ========
 
+function padDecodeGuitarFretKey(key) {
+  var out = [];
+  for (var i = 0; i < key.length; i++) {
+    var ch = key.charAt(i);
+    if (ch === 'x') out.push(null);
+    else if (ch >= 'a' && ch <= 'z') out.push(ch.charCodeAt(0) - 97 + 10);
+    else out.push(parseInt(ch, 10));
+  }
+  return out;
+}
+
+function padEncodeGuitarFretKey(frets) {
+  return frets.map(function(f) {
+    if (f === null) return 'x';
+    if (f >= 10) return String.fromCharCode(97 + f - 10);
+    return String(f);
+  }).join('');
+}
+
+function padGetGuitarTuningName(tuning, options) {
+  if (options && options.tuningName) return options.tuningName;
+  if (typeof PAD_GUITAR_TUNING === 'undefined') return null;
+  if (!tuning || tuning.length !== PAD_GUITAR_TUNING.length) return null;
+  for (var i = 0; i < tuning.length; i++) {
+    if (tuning[i] !== PAD_GUITAR_TUNING[i]) return null;
+  }
+  return 'standard';
+}
+
+function padGetGuitarChordKey(rootPC, chordPCS) {
+  return rootPC + '|' + chordPCS.join(',');
+}
+
+function padGetGuitarFormKnowledge(frets, chordPCS, rootPC, tuning, options) {
+  if (typeof PAD_GUITAR_FORM_KNOWLEDGE === 'undefined') return null;
+  var tuningName = padGetGuitarTuningName(tuning, options);
+  if (!tuningName || !PAD_GUITAR_FORM_KNOWLEDGE[tuningName]) return null;
+  var chordKey = padGetGuitarChordKey(rootPC, chordPCS);
+  var byChord = PAD_GUITAR_FORM_KNOWLEDGE[tuningName][chordKey];
+  if (!byChord) return null;
+  return byChord[padEncodeGuitarFretKey(frets)] || null;
+}
+
+function padGetGuitarPositionFamily(frets) {
+  if (typeof PAD_GUITAR_POSITION_FAMILIES === 'undefined') return null;
+  var minFret = Infinity;
+  var maxFret = 0;
+  for (var i = 0; i < frets.length; i++) {
+    if (frets[i] !== null && frets[i] > 0) {
+      if (frets[i] < minFret) minFret = frets[i];
+      if (frets[i] > maxFret) maxFret = frets[i];
+    }
+  }
+  if (minFret === Infinity) return null;
+  for (var pi = 0; pi < PAD_GUITAR_POSITION_FAMILIES.length; pi++) {
+    var family = PAD_GUITAR_POSITION_FAMILIES[pi];
+    if (minFret >= family.minFret && maxFret <= family.maxFret) {
+      return {
+        id: family.id,
+        label: family.label,
+        minFret: family.minFret,
+        maxFret: family.maxFret,
+        source: family.source,
+      };
+    }
+  }
+  return null;
+}
+
+function padApplyGuitarFormKnowledge(form, chordPCS, rootPC, tuning, options) {
+  var meta = padGetGuitarFormKnowledge(form.frets, chordPCS, rootPC, tuning, options);
+  form.referenceMeta = meta || null;
+  form.positionFamily = padGetGuitarPositionFamily(form.frets);
+  if (meta && meta.movable !== undefined) {
+    form.movable = !!meta.movable;
+  } else {
+    form.movable = form.frets.indexOf(0) === -1;
+  }
+  if (meta && meta.fingerings && meta.fingerings.length > 0) {
+    var fingering = meta.fingerings[0];
+    if (fingering.fingers) form.fingers = fingering.fingers.slice();
+    form.barre = fingering.barre || null;
+    form.fingeringNote = fingering.note || '';
+  }
+  if (meta && meta.nonBarre && Array.isArray(form.qualityIssues)) {
+    form.qualityIssues = form.qualityIssues.filter(function(issue) {
+      return issue !== 'broken_barre';
+    });
+    form.isBrokenBarre = false;
+  }
+  return form;
+}
+
+function padGuitarReferenceVariantBonus(frets, refArrays, rootPC, tuning) {
+  var best = 0;
+  for (var ri = 0; ri < refArrays.length; ri++) {
+    var ref = refArrays[ri];
+    if (!ref || ref.length !== frets.length) continue;
+    var muted = [];
+    var ok = true;
+    for (var i = 0; i < frets.length; i++) {
+      if (frets[i] === ref[i]) continue;
+      if (frets[i] === null && ref[i] !== null) {
+        muted.push(i);
+        continue;
+      }
+      ok = false;
+      break;
+    }
+    if (!ok || muted.length === 0 || muted.length > 1) continue;
+
+    var soundingFirst = -1;
+    var soundingLast = -1;
+    for (var si = 0; si < frets.length; si++) {
+      if (frets[si] !== null) {
+        if (soundingFirst === -1) soundingFirst = si;
+        soundingLast = si;
+      }
+    }
+    var onlyOuterMutes = true;
+    for (var mi = 0; mi < muted.length; mi++) {
+      if (muted[mi] >= soundingFirst && muted[mi] <= soundingLast) {
+        onlyOuterMutes = false;
+        break;
+      }
+    }
+    if (!onlyOuterMutes) continue;
+
+    var score = 70;
+    var mutedLowSideOnly = muted.every(function(idx) { return idx > soundingLast; });
+    var mutedHighSideOnly = muted.every(function(idx) { return idx < soundingFirst; });
+    if (mutedLowSideOnly) score = 110;
+    if (mutedHighSideOnly) score = 25;
+
+    var fifthPC = (rootPC + 7) % 12;
+    for (var di = 0; di < muted.length; di++) {
+      var idx = muted[di];
+      var refPC = (tuning[idx] + ref[idx]) % 12;
+      if (refPC === fifthPC) score += 45;
+    }
+    if (score > best) best = score;
+  }
+  return best;
+}
+
 function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, options) {
   if (!options) options = {};
   var minNotes = options.minNotes !== undefined ? options.minNotes : 3;
@@ -741,24 +886,19 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
   // Unknown tunings (8-string, open tunings without reference data) get no bonus,
   // so the scoring logic alone determines ranking — this is by design.
   var refSet = null;
+  var refArrays = null;
   if (typeof PAD_GUITAR_REFERENCE_FORMS !== 'undefined') {
-    var tuningName = options.tuningName || null;
-    if (!tuningName && typeof PAD_GUITAR_TUNING !== 'undefined') {
-      // Auto-detect standard tuning by comparing with PAD_GUITAR_TUNING
-      if (tuning.length === PAD_GUITAR_TUNING.length) {
-        var isStandard = true;
-        for (var ti = 0; ti < tuning.length; ti++) {
-          if (tuning[ti] !== PAD_GUITAR_TUNING[ti]) { isStandard = false; break; }
-        }
-        if (isStandard) tuningName = 'standard';
-      }
-    }
+    var tuningName = padGetGuitarTuningName(tuning, options);
     if (tuningName && PAD_GUITAR_REFERENCE_FORMS[tuningName]) {
-      var chordKey = rootPC + '|' + chordPCS.join(',');
+      var chordKey = padGetGuitarChordKey(rootPC, chordPCS);
       var refForms = PAD_GUITAR_REFERENCE_FORMS[tuningName][chordKey];
       if (refForms) {
         refSet = {};
-        for (var ri = 0; ri < refForms.length; ri++) refSet[refForms[ri]] = true;
+        refArrays = [];
+        for (var ri = 0; ri < refForms.length; ri++) {
+          refSet[refForms[ri]] = true;
+          refArrays.push(padDecodeGuitarFretKey(refForms[ri]));
+        }
       }
     }
   }
@@ -772,12 +912,15 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
   var wRootStr4   = W.rootStr4   !== undefined ? W.rootStr4   : 20;
   var wTop4       = W.top4       !== undefined ? W.top4       : 30;
   var wGuideTone  = W.guideTone  !== undefined ? W.guideTone  : 40;
-  var wOpenStr    = W.openStr    !== undefined ? W.openStr    : 30;
+  var wOpenStr    = W.openStr    !== undefined ? W.openStr    : 10;
   var wStringCount= W.stringCount!== undefined ? W.stringCount: 30;
   var wAvgFret    = W.avgFret    !== undefined ? W.avgFret    : 12;
   var wSpan       = W.span       !== undefined ? W.span       : 10;
   var wGaps       = W.gaps       !== undefined ? W.gaps       : 15;
   var wFullFret   = W.fullFret   !== undefined ? W.fullFret   : 15;
+  var wClosedAForm= W.closedAForm!== undefined ? W.closedAForm: 80;
+  var wMajor7OpenCluster = W.major7OpenCluster !== undefined ? W.major7OpenCluster : 150;
+  var preferRootBass = options.preferRootBass !== false;
 
   // Fifth is optional when chord has tensions (9th+), since guitar has only 6 strings.
   // BUT: altered 5ths (b5=6, #5=8) that REPLACE the natural 5th define chord quality
@@ -811,13 +954,14 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
   }
 
   // Check if chord has a 3rd, 6th, 7th (for filtering and guide tone bonus)
-  var has3 = false, has4 = false, has6thInChord = false, has7thInChord = false;
+  var has3 = false, has4 = false, has6thInChord = false, has7thInChord = false, hasMajor7thInChord = false;
   for (var i = 0; i < chordPCS.length; i++) {
     var iv = chordPCS[i] % 12;
     if (iv === 3) has3 = true;
     if (iv === 4) has4 = true;
     if (iv === 9) has6thInChord = true;
     if (iv === 10 || iv === 11) has7thInChord = true;
+    if (iv === 11) hasMajor7thInChord = true;
   }
   var hasThirdInChord = has3 || has4;
   var third3PC = (rootPC + 3) % 12;
@@ -901,6 +1045,13 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       for (var fret in fretGroups) {
         var strs = fretGroups[fret].slice().sort(function(a, b) { return a - b; });
         if (parseInt(fret) === minFrettedFret && strs.length >= 2) {
+          if (strs.length === 2) {
+            fingerUnits += 2;
+            for (var bi2 = strs[0] + 1; bi2 < strs[1]; bi2++) {
+              if (chosen[bi2] === null) { isBrokenBarre = true; break; }
+            }
+            continue;
+          }
           // Barre candidate: check if strings are contiguous
           // (allowing higher-fretted strings in between, but not muted/open)
           var barreFirst = strs[0], barreLast = strs[strs.length - 1];
@@ -943,23 +1094,6 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
         }
       }
       if (fingerUnits > 4) return;
-
-      // Broken barre check for ALL fret groups (not just minFrettedFret):
-      // Same fret on 3+ distant strings with different frets between = can't barre
-      // (2 strings at same fret can use separate fingers, so only flag 3+)
-      for (var fret in fretGroups) {
-        if (parseInt(fret) === minFrettedFret) continue; // already checked above
-        var strs2 = fretGroups[fret];
-        if (strs2.length < 3) continue; // 2 strings = separate fingers OK
-        strs2 = strs2.slice().sort(function(a,b){return a-b;});
-        for (var si = strs2[0]+1; si < strs2[strs2.length-1]; si++) {
-          if (chosen[si] !== null && chosen[si] !== parseInt(fret) && chosen[si] !== 0) {
-            fingerUnits += strs2.length - 1;
-            if (fingerUnits > 4) return;
-            break;
-          }
-        }
-      }
 
       // Finger reach check: index (lowest fret) and pinky (highest fret)
       // must not be too far apart in BOTH fret and string dimensions.
@@ -1051,6 +1185,7 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
         bassPC: lowestPC,
         bassString: loStr,
         rootInBass: lowestPC === rootPC,
+        fifthInBass: lowestPC === ((rootPC + 7) % 12),
         isRootless: isRootless,
         stringCount: count,
         span: span,
@@ -1100,8 +1235,13 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
   // Balances string count against fret position so open chords rank well
   function sortScore(r) {
     var avgFret = 0, n = 0;
+    var minFret = Infinity;
     for (var i = 0; i < r.frets.length; i++) {
-      if (r.frets[i] !== null && r.frets[i] > 0) { avgFret += r.frets[i]; n++; }
+      if (r.frets[i] !== null && r.frets[i] > 0) {
+        avgFret += r.frets[i];
+        if (r.frets[i] < minFret) minFret = r.frets[i];
+        n++;
+      }
     }
     avgFret = n > 0 ? avgFret / n : 0;
     // Fifth-in-bass bonus: bossa batida plays R+5 on bass strings (thumb)
@@ -1224,12 +1364,62 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
     // but not so large that it overrides all other scoring.
     var refBonus = 0;
     if (refSet) {
-      var fretKey = r.frets.map(function(f) {
-        if (f === null) return 'x';
-        if (f >= 10) return String.fromCharCode(97 + f - 10);
-        return String(f);
-      }).join('');
+      var fretKey = padEncodeGuitarFretKey(r.frets);
       if (refSet[fretKey]) refBonus = 200;
+      else if (refArrays) refBonus = padGuitarReferenceVariantBonus(r.frets, refArrays, rootPC, tuning);
+    }
+
+    var formKnowledge = padGetGuitarFormKnowledge(r.frets, chordPCS, rootPC, tuning, options);
+    var knowledgeBonus = formKnowledge && formKnowledge.rankBonus ? formKnowledge.rankBonus : 0;
+
+    var closedAFormBonus = 0;
+    if (numStrings === 6 && has7or6 && r.rootInBass && r.bassString === 4 && openCount === 0) {
+      closedAFormBonus = wClosedAForm;
+    }
+
+    // Muting both outer E strings while sounding the middle strings is playable,
+    // but it asks for two independent edge mutes. Keep it available, not early.
+    var edgeMutePenalty = 0;
+    if (numStrings === 6 && openCount > 0 &&
+        r.frets[0] === null && r.frets[1] !== null &&
+        r.frets[5] === null && r.frets[4] !== null) {
+      edgeMutePenalty = 110;
+    }
+
+    // Root on 6th string with the 5th string fretted behind it is a suspicious
+    // closed grip for 7th-family chords. The sound can be valid, but the left
+    // hand often becomes harder than the diagram suggests.
+    var root6LowerAStringPenalty = 0;
+    if (numStrings === 6 && r.rootInBass && r.bassString === 5 && has7or6 &&
+        r.frets[5] !== null && r.frets[5] > 0 &&
+        r.frets[4] !== null && r.frets[4] > 0 &&
+        r.frets[4] < r.frets[5]) {
+      root6LowerAStringPenalty = 110;
+    }
+
+    var openMutePenalty = 0;
+    if (openCount > 0 && (r.gaps > 0 || r.openGaps > 0)) {
+      openMutePenalty = 70 + r.gaps * 25 + r.openGaps * 60;
+    }
+
+    var openHighStringConflictPenalty = 0;
+    if (numStrings === 6 && r.frets[0] === 0 && r.frets[1] !== null && r.frets[1] > 0 && maxFret >= 4) {
+      openHighStringConflictPenalty = 120;
+    }
+
+    var highStringGapPenalty = 0;
+    if (numStrings === 6 && r.frets[0] !== null && r.frets[1] === null) {
+      highStringGapPenalty = 120;
+    }
+
+    var major7OpenClusterPenalty = 0;
+    if (hasMajor7thInChord && openCount >= 2) {
+      major7OpenClusterPenalty = wMajor7OpenCluster;
+    }
+
+    var lowPositionWideStretchPenalty = 0;
+    if (has7or6 && openCount === 0 && r.span >= 4 && minFret <= 1) {
+      lowPositionWideStretchPenalty = 80;
     }
 
     return (r.rootInBass ? wRootBass : 0)
@@ -1242,6 +1432,8 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       + addSusOpenBonus
       + addSusTop3Bonus
       + refBonus
+      + knowledgeBonus
+      + closedAFormBonus
       + r.stringCount * wStringCount
       - avgFret * wAvgFret
       - r.span * wSpan
@@ -1251,7 +1443,14 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
       - brokenBarrePenalty
       - overcrowdedPenalty
       - thinPenalty
-      - stretchPenalty;
+      - stretchPenalty
+      - edgeMutePenalty
+      - root6LowerAStringPenalty
+      - openMutePenalty
+      - openHighStringConflictPenalty
+      - highStringGapPenalty
+      - major7OpenClusterPenalty
+      - lowPositionWideStretchPenalty;
   }
 
   if (allowRootless) {
@@ -1296,14 +1495,214 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
     results = pinned.concat(results);
   }
 
+  if (preferRootBass) {
+    var rootBassResults = [];
+    var nonRootBassResults = [];
+    for (var ri2 = 0; ri2 < results.length; ri2++) {
+      if (results[ri2].rootInBass) rootBassResults.push(results[ri2]);
+      else nonRootBassResults.push(results[ri2]);
+    }
+    if (rootBassResults.length > 0) {
+      results = rootBassResults.concat(nonRootBassResults);
+    }
+  }
+
   var finalResults = results.slice(0, maxResults);
   // Enrich results with finger assignments and barre info
   for (var fi = 0; fi < finalResults.length; fi++) {
     var fa = padAssignFingers(finalResults[fi].frets);
     finalResults[fi].fingers = fa.fingers;
     finalResults[fi].barre = fa.barre;
+    finalResults[fi].qualityIssues = padAnalyzeGuitarFormQuality(
+      finalResults[fi].frets,
+      chordPCS,
+      rootPC,
+      tuning,
+      { maxSpan: maxSpan, maxFingerUnits: 4 }
+    ).issues;
+    padApplyGuitarFormKnowledge(finalResults[fi], chordPCS, rootPC, tuning, options);
   }
   return finalResults;
+}
+
+function padAnalyzeGuitarFormQuality(frets, chordPCS, rootPC, tuning, options) {
+  if (!options) options = {};
+  var maxSpan = options.maxSpan !== undefined ? options.maxSpan : 4;
+  var maxFingerUnits = options.maxFingerUnits !== undefined ? options.maxFingerUnits : 4;
+  var issues = [];
+  var pcs = {};
+  var midiSeen = {};
+  var sounding = 0;
+  var fMin = Infinity;
+  var fMax = 0;
+  var lowestMidi = Infinity;
+  var lowestPC = -1;
+  var hiStr = -1;
+  var loStr = -1;
+  var openCount = 0;
+
+  for (var i = 0; i < frets.length; i++) {
+    var fret = frets[i];
+    if (fret === null) continue;
+    sounding++;
+    if (hiStr === -1) hiStr = i;
+    loStr = i;
+    if (fret === 0) openCount++;
+    if (fret > 0) {
+      if (fret < fMin) fMin = fret;
+      if (fret > fMax) fMax = fret;
+    }
+    var midi = tuning[i] + fret;
+    var pc = midi % 12;
+    pcs[pc] = true;
+    if (midiSeen[midi] && fret > 0 && midiSeen[midi] > 0) {
+      issues.push('duplicate_fretted_midi');
+    }
+    midiSeen[midi] = fret > 0 ? 1 : -1;
+    if (midi < lowestMidi) {
+      lowestMidi = midi;
+      lowestPC = pc;
+    }
+  }
+
+  var span = (fMin <= fMax) ? fMax - fMin + 1 : 0;
+  if (span > maxSpan) issues.push('span_too_wide');
+  if (!pcs[rootPC]) issues.push('missing_root');
+
+  var has3 = false;
+  var has4 = false;
+  var chordAbsPCS = {};
+  var has7or6 = false;
+  var hasMajor7thInChord = false;
+  var hasNatural5th = false;
+  var hasAltered5th = false;
+  for (var ci = 0; ci < chordPCS.length; ci++) {
+    var iv = chordPCS[ci] % 12;
+    if (iv === 3) has3 = true;
+    if (iv === 4) has4 = true;
+    if (iv === 7) hasNatural5th = true;
+    if (iv === 6 || iv === 8) hasAltered5th = true;
+    if (iv === 9 || iv === 10 || iv === 11) has7or6 = true;
+    if (iv === 11) hasMajor7thInChord = true;
+    chordAbsPCS[(rootPC + iv) % 12] = true;
+  }
+  var third3PC = (rootPC + 3) % 12;
+  var third4PC = (rootPC + 4) % 12;
+  if ((has3 || has4) && !pcs[third3PC] && !pcs[third4PC]) issues.push('missing_third');
+
+  var fifthPC = (rootPC + 7) % 12;
+  var alteredFifthIsChordTone = hasAltered5th && !hasNatural5th;
+  var fifthIsOptional = has7or6 && !alteredFifthIsChordTone;
+  for (var pc in chordAbsPCS) {
+    var p = parseInt(pc);
+    if (fifthIsOptional && p === fifthPC) continue;
+    if (!pcs[p]) issues.push('missing_required_note_' + ((p - rootPC + 12) % 12));
+  }
+
+  if (lowestPC === fifthPC && lowestPC !== rootPC) issues.push('fifth_in_bass');
+
+  var fingerData = padEstimateGuitarFingerUnits(frets);
+  if (fingerData.fingerUnits > maxFingerUnits) issues.push('too_many_finger_units');
+  if (fingerData.isBrokenBarre) issues.push('broken_barre');
+
+  var gaps = 0;
+  for (var gi = hiStr + 1; gi < loStr; gi++) {
+    if (frets[gi] === null) gaps++;
+  }
+  if (gaps > 0) issues.push('interior_gap');
+  if (openCount > 0 && gaps > 0) issues.push('open_mute_difficulty');
+  if (sounding <= 3 && fMin >= 3) issues.push('thin_high_position');
+  if (sounding >= 6 && span >= 5) issues.push('overcrowded');
+  if (openCount > 0 &&
+      frets.length === 6 && frets[0] === null && frets[1] !== null &&
+      frets[5] === null && frets[4] !== null) {
+    issues.push('edge_mute_difficulty');
+  }
+  if (frets.length === 6 && frets[0] === 0 &&
+      frets[1] !== null && frets[1] > 0 &&
+      fMax >= 4) {
+    issues.push('open_high_string_conflict');
+  }
+  if (frets.length === 6 && frets[0] !== null && frets[1] === null) {
+    issues.push('high_string_gap');
+  }
+  if (hasMajor7thInChord && openCount >= 2) {
+    issues.push('major7_open_cluster');
+  }
+  if (has7or6 && openCount === 0 && span >= 4 && fMin <= 1) {
+    issues.push('low_position_wide_stretch');
+  }
+  if (frets.length === 6 && lowestPC === rootPC && has7or6 &&
+      frets[5] !== null && frets[5] > 0 &&
+      frets[4] !== null && frets[4] > 0 &&
+      frets[4] < frets[5]) {
+    issues.push('root6_lower_a_string');
+  }
+
+  return {
+    issues: issues,
+    bassPC: lowestPC,
+    rootInBass: lowestPC === rootPC,
+    fifthInBass: lowestPC === fifthPC && lowestPC !== rootPC,
+    stringCount: sounding,
+    span: span,
+    fingerUnits: fingerData.fingerUnits,
+    isBrokenBarre: fingerData.isBrokenBarre,
+  };
+}
+
+function padEstimateGuitarFingerUnits(frets) {
+  var fretGroups = {};
+  var minFrettedFret = Infinity;
+  for (var i = 0; i < frets.length; i++) {
+    if (frets[i] !== null && frets[i] > 0) {
+      if (!fretGroups[frets[i]]) fretGroups[frets[i]] = [];
+      fretGroups[frets[i]].push(i);
+      if (frets[i] < minFrettedFret) minFrettedFret = frets[i];
+    }
+  }
+  var fingerUnits = 0;
+  var isBrokenBarre = false;
+  for (var fret in fretGroups) {
+    var strs = fretGroups[fret].slice().sort(function(a, b) { return a - b; });
+    if (parseInt(fret) === minFrettedFret && strs.length >= 2) {
+      if (strs.length === 2) {
+        fingerUnits += 2;
+        for (var bi2 = strs[0] + 1; bi2 < strs[1]; bi2++) {
+          if (frets[bi2] === null) { isBrokenBarre = true; break; }
+        }
+        continue;
+      }
+      var barreFirst = strs[0];
+      var barreLast = strs[strs.length - 1];
+      var barreValid = true;
+      for (var bi = barreFirst + 1; bi < barreLast; bi++) {
+        if (frets[bi] === 0) { barreValid = false; break; }
+      }
+      if (barreValid) {
+        fingerUnits += 1;
+        for (var mi = barreFirst + 1; mi < barreLast; mi++) {
+          if (frets[mi] === null) { isBrokenBarre = true; break; }
+        }
+      } else {
+        isBrokenBarre = true;
+        var groups = 1;
+        for (var gi = 1; gi < strs.length; gi++) {
+          if (strs[gi] !== strs[gi - 1] + 1) groups++;
+        }
+        fingerUnits += groups;
+      }
+    } else if (parseInt(fret) === minFrettedFret && strs.length === 1) {
+      fingerUnits += 1;
+    } else {
+      var groups2 = 1;
+      for (var gi2 = 1; gi2 < strs.length; gi2++) {
+        if (strs[gi2] !== strs[gi2 - 1] + 1) groups2++;
+      }
+      fingerUnits += groups2;
+    }
+  }
+  return { fingerUnits: fingerUnits, isBrokenBarre: isBrokenBarre };
 }
 
 // ======== FINGER ASSIGNMENT ========
@@ -1811,7 +2210,11 @@ if (typeof module !== 'undefined') module.exports = {
   padGetShellIntervals, padCalcAllVoicingPositions, padFindCompactPositions,
   padChordContextKey, padGetBuilderChordName,
   padGetDiatonicTetrads, padFindParentScales,
-  padEnumGuitarChordForms, padAssignFingers, padDetectChord,
+  padEnumGuitarChordForms, padAnalyzeGuitarFormQuality,
+  padEncodeGuitarFretKey, padDecodeGuitarFretKey,
+  padGetGuitarTuningName, padGetGuitarChordKey,
+  padGetGuitarFormKnowledge, padGetGuitarPositionFamily,
+  padEstimateGuitarFingerUnits, padAssignFingers, padDetectChord,
   padParseStockVoicings, padMatchStockVoicing,
   padClassifyPC, padClassifyColor,
   DIATONIC_CHORD_DB,

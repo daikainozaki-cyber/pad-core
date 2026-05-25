@@ -584,6 +584,102 @@ describe('padEnumGuitarChordForms', () => {
     }
   });
 
+  it('default guitar ranking keeps fifth-in-bass forms behind available root-bass forms', () => {
+    const cases = [
+      { root: 0, pcs: [0, 4, 7], name: 'C' },
+      { root: 9, pcs: [0, 3, 7], name: 'Am' },
+      { root: 0, pcs: [0, 4, 7, 10], name: 'C7' },
+      { root: 9, pcs: [0, 3, 7, 10], name: 'Am7' },
+      { root: 0, pcs: [0, 4, 7, 14], name: 'Cadd9' },
+      { root: 7, pcs: [0, 4, 7, 14], name: 'Gadd9' },
+    ];
+
+    for (const c of cases) {
+      const forms = padEnumGuitarChordForms(c.pcs, c.root, GUITAR, 21, 4, { maxResults: 15 });
+      expect(forms.length, c.name).toBeGreaterThan(0);
+      const firstNonRoot = forms.findIndex(f => !f.rootInBass);
+      if (firstNonRoot === -1) continue;
+      for (let i = firstNonRoot; i < forms.length; i++) {
+        expect(forms[i].rootInBass, `${c.name} root-bass form after non-root form`).toBe(false);
+      }
+      expect(forms[0].rootInBass, c.name).toBe(true);
+      expect(forms[0].fifthInBass, c.name).toBe(false);
+    }
+  });
+
+  it('preferRootBass: false keeps the genre ranking escape hatch available', () => {
+    const forms = padEnumGuitarChordForms([0, 4, 7], 0, GUITAR, 21, 4, {
+      maxResults: 15,
+      preferRootBass: false,
+      weights: { fifthBass: 300 },
+    });
+    expect(forms.length).toBeGreaterThan(0);
+    expect(forms.some(f => f.fifthInBass)).toBe(true);
+  });
+
+  it('qualityIssues records why a generated form is suspicious', () => {
+    const forms = padEnumGuitarChordForms([0, 4, 7], 0, GUITAR, 21, 4);
+    for (const f of forms) {
+      expect(Array.isArray(f.qualityIssues)).toBe(true);
+    }
+    const fifthBass = padAnalyzeGuitarFormQuality([3, 1, 0, 2, 3, 3], [0, 4, 7], 0, GUITAR);
+    expect(fifthBass.issues).toContain('fifth_in_bass');
+    const missingRoot = padAnalyzeGuitarFormQuality([3, 3, 0, null, null, null], [0, 4, 7], 0, GUITAR);
+    expect(missingRoot.issues).toContain('missing_root');
+  });
+
+  it('human-curated open A7 keeps thumb mute and 2-3 fingering metadata', () => {
+    const forms = padEnumGuitarChordForms([0, 4, 7, 10], 9, GUITAR, 21, 4, { maxResults: 15 });
+    const a7 = forms.find(f => padEncodeGuitarFretKey(f.frets) === '02020x');
+    expect(a7).toBeDefined();
+    expect(a7.referenceMeta).toBeTruthy();
+    expect(a7.referenceMeta.mutes[0].actor).toBe('thumb');
+    expect(a7.referenceMeta.mutes[0].string).toBe(5);
+    expect(a7.fingers).toEqual([0, 3, 0, 2, 0, null]);
+    expect(a7.barre).toBeNull();
+    expect(a7.qualityIssues).not.toContain('broken_barre');
+    expect(a7.movable).toBe(false);
+  });
+
+  it('human-curated open B7 is allowed and keeps middle-finger mute metadata', () => {
+    const forms = padEnumGuitarChordForms([0, 4, 7, 10], 11, GUITAR, 21, 4, { maxResults: 15 });
+    const b7 = forms.find(f => padEncodeGuitarFretKey(f.frets) === '20212x');
+    expect(b7).toBeDefined();
+    expect(b7.referenceMeta).toBeTruthy();
+    expect(b7.referenceMeta.mutes[0].actor).toBe('middle');
+    expect(b7.referenceMeta.mutes[0].string).toBe(5);
+    expect(b7.fingers).toEqual([4, 0, 3, 2, 1, null]);
+    expect(b7.barre).toBeNull();
+    expect(b7.qualityIssues).not.toContain('broken_barre');
+  });
+
+  it('human-curated Esus and E7sus open forms stay non-barre', () => {
+    const esus = padEnumGuitarChordForms([0, 5, 7], 4, GUITAR, 21, 4, { maxResults: 15 })
+      .find(f => padEncodeGuitarFretKey(f.frets) === '002220');
+    expect(esus).toBeDefined();
+    expect(esus.referenceMeta.nonBarre).toBe(true);
+    expect(esus.fingers).toEqual([0, 0, 3, 2, 1, 0]);
+    expect(esus.barre).toBeNull();
+    expect(esus.qualityIssues).not.toContain('broken_barre');
+
+    const e7sus = padEnumGuitarChordForms([0, 5, 7, 10], 4, GUITAR, 21, 4, { maxResults: 15 })
+      .find(f => padEncodeGuitarFretKey(f.frets) === '002020');
+    expect(e7sus).toBeDefined();
+    expect(e7sus.referenceMeta.nonBarre).toBe(true);
+    expect(e7sus.fingers).toEqual([0, 0, 2, 0, 1, 0]);
+    expect(e7sus.barre).toBeNull();
+    expect(e7sus.qualityIssues).not.toContain('broken_barre');
+  });
+
+  it('guitar forms carry position-family and movable metadata', () => {
+    const position = padGetGuitarPositionFamily([8, 8, 9, 9, 8, null]);
+    expect(position.id).toBe('jazz-pos-3');
+
+    const forms = padEnumGuitarChordForms([0, 4, 7], 0, GUITAR, 21, 4, { noOpen: true, maxResults: 15 });
+    expect(forms.some(f => f.positionFamily && f.positionFamily.id)).toBe(true);
+    expect(forms.some(f => f.movable)).toBe(true);
+  });
+
   it('works with bass tuning (4 strings)', () => {
     const forms = padEnumGuitarChordForms([0, 4, 7], 0, BASS, 21, 4);
     expect(forms.length).toBeGreaterThan(0);
@@ -840,9 +936,9 @@ describe('padEnumGuitarChordForms', () => {
   it('standard barre (Am shape at fret 4) ranks in top 5 for C#m', () => {
     // [4,5,6,6,4,x] or [4,5,6,6,4,4] should be top-ranked for C#m
     const forms = padEnumGuitarChordForms([0, 3, 7], 1, GUITAR, 12, 5);
-    const top5frets = forms.slice(0, 5).map(f => f.frets.join(','));
+    const top5frets = forms.slice(0, 5).map(f => f.frets.map(x => x === null ? 'x' : x).join(','));
     const hasAmShape = top5frets.some(fr =>
-      fr === '4,5,6,6,4,null' || fr === '4,5,6,6,4,4'
+      fr === '4,5,6,6,4,x' || fr === '4,5,6,6,4,4'
     );
     expect(hasAmShape).toBe(true);
   });
@@ -1294,6 +1390,58 @@ describe('padClassifyColor', () => {
   it('falls back to inactive for missing key in custom theme', () => {
     const custom = { inactive: '#000' };
     expect(padClassifyColor('guide3', custom)).toBe('#000');
+  });
+});
+
+describe('padComputeRenderState', () => {
+  it('marks manually added #9 as tension even though it shares pitch class with m3', () => {
+    const state = padComputeRenderState({
+      mode: 'chord',
+      key: 0,
+      scaleIdx: 0,
+      builderRoot: 0,
+      qualityPCS: [0, 4, 7, 10],
+      builderPCS: [0, 4, 7, 10, 3],
+      chordName: 'C7(#9)',
+      voicing: {},
+      noRootLabel: '...',
+    });
+    expect(state.activePCS).toEqual(new Set([0, 3, 4, 7, 10]));
+    expect(state.tensionPCS).toContain(3);
+    expect(state.guide3PCS).toContain(4);
+    expect(state.guide3PCS).not.toContain(3);
+    expect(state.guide7PCS).toContain(10);
+  });
+
+  it('does not replace chord pad tones with C Major when C-fixed is on', () => {
+    const state = padComputeRenderState({
+      cFixed: true,
+      mode: 'chord',
+      key: 0,
+      scaleIdx: 0,
+      builderRoot: 0,
+      qualityPCS: [0, 3, 7, 10],
+      builderPCS: [0, 3, 7, 10, 14],
+      chordName: 'Cm7(9)',
+      voicing: {},
+      noRootLabel: '...',
+    });
+    const padState = padApplyPadOverride(state);
+    expect(padState.activePCS).toEqual(new Set([0, 2, 3, 7, 10]));
+    expect(padState.guide3PCS).toContain(3);
+    expect(padState.guide7PCS).toContain(10);
+  });
+
+  it('keeps C-fixed override for scale mode', () => {
+    const state = padComputeRenderState({
+      cFixed: true,
+      mode: 'scale',
+      key: 5,
+      scaleIdx: 0,
+    });
+    const padState = padApplyPadOverride(state);
+    expect(padState.rootPC).toBe(0);
+    expect(padState.activePCS).toEqual(new Set([0, 2, 4, 5, 7, 9, 11]));
   });
 });
 
