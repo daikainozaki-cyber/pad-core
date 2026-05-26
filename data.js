@@ -594,7 +594,7 @@ var PAD_GUITAR_REFERENCE_FORMS = {
     "0|0,4,7,10,21": ["55323x","553333","687778","8a98a8"],
     "0|0,4,7,11": ["000233","354533","7555xx","cccaxx"],
     "0|0,4,7,11,14": ["00003x","x34233","755550","a899x8"],
-    "0|0,4,7,14": ["03023x","03003x","080078","a89axx"],
+    "0|0,4,7,14": ["33023x","03023x","03003x","080078","a89axx"],
     "0|0,4,7,9": ["01223x","55553x","x897x8","8a9ax8"],
     "0|0,4,7,9,14": ["33223x","55003x","887778","aa9aax"],
     "0|0,4,8": ["x1123x","x5563x","x55678","899axx"],
@@ -668,6 +668,20 @@ var PAD_GUITAR_POSITION_FAMILIES = [
 
 var PAD_GUITAR_FORM_KNOWLEDGE = {
   "standard": {
+    "0|0,4,7,14": {
+      "33023x": {
+        movable: false,
+        rankBonus: 180,
+        styleTags: ["folk-open", "folk-rock", "jangle"],
+        nonBarre: true,
+        fingerings: [
+          { id: "folk-open-seed", fingers: [4, 3, 0, 1, 2, null], barre: null, note: "Cadd9 open grip x32033 is a standard folk/folk-rock color shape." }
+        ],
+        mutes: [
+          { string: 5, actor: "thumb", hand: "fretting", context: "folk-open", note: "Mute or avoid the 6th string." }
+        ]
+      }
+    },
     "9|0,4,7,10": {
       "02020x": {
         movable: false,
@@ -732,6 +746,426 @@ var PAD_GUITAR_FORM_KNOWLEDGE = {
   }
 };
 
+// ======== GUITAR SOURCE FORM SEEDS ========
+// Source-derived movable grips. Shapes are stored low E → high e here because
+// they mirror guitar books; the installer converts them to pad-core's internal
+// high e → low E fret-key format.
+var PAD_GUITAR_SOURCE_PATTERN_SEEDS = [
+  {
+    id: "misch-a-root-maj7",
+    source: "Misch-Inspired Rhythm Guitar Course PDF: Basic 7th Chords",
+    quality: "maj7",
+    intervals: [0, 4, 7, 11],
+    rootString: 4,
+    lowToHighOffsets: [null, 0, 2, 1, 2, 0],
+    styleTags: ["neo-soul", "misch", "a-string-root"],
+    genreBonuses: { neoSoul: 170, funk: 70 },
+    note: "A-string-root movable maj7 grip from the Misch neo-soul course."
+  },
+  {
+    id: "misch-a-root-maj7-muted-top",
+    source: "Misch-Inspired Rhythm Guitar Course PDF: Basic 7th Chords",
+    quality: "maj7",
+    intervals: [0, 4, 7, 11],
+    rootString: 4,
+    lowToHighOffsets: [null, 0, 2, 1, 2, null],
+    styleTags: ["neo-soul", "misch", "a-string-root"],
+    genreBonuses: { neoSoul: 190, funk: 80 },
+    note: "A-string-root maj7 grip with the top string muted, common for tight R&B/neo-soul rhythm."
+  },
+  {
+    id: "misch-a-root-m7",
+    source: "Misch-Inspired Rhythm Guitar Course PDF: Basic 7th Chords",
+    quality: "m7",
+    intervals: [0, 3, 7, 10],
+    rootString: 4,
+    lowToHighOffsets: [null, 0, 2, 0, 1, 0],
+    styleTags: ["neo-soul", "misch", "a-string-root"],
+    genreBonuses: { neoSoul: 170, funk: 70 },
+    note: "A-string-root movable minor 7 grip from the Misch neo-soul course."
+  },
+  {
+    id: "misch-a-root-7",
+    source: "Misch-Inspired Rhythm Guitar Course PDF: Basic 7th Chords",
+    quality: "7",
+    intervals: [0, 4, 7, 10],
+    rootString: 4,
+    lowToHighOffsets: [null, 0, 2, 0, 2, 0],
+    styleTags: ["neo-soul", "misch", "a-string-root"],
+    genreBonuses: { neoSoul: 150, funk: 90 },
+    note: "A-string-root movable dominant 7 grip from the Misch neo-soul course."
+  },
+  {
+    id: "misch-e-root-maj7",
+    source: "Misch-Inspired Rhythm Guitar Course PDF: Basic 7th Chords",
+    quality: "maj7",
+    intervals: [0, 4, 7, 11],
+    rootString: 5,
+    lowToHighOffsets: [0, null, 1, 1, 1, null],
+    styleTags: ["neo-soul", "misch", "e-string-root"],
+    genreBonuses: { neoSoul: 140, funk: 50 },
+    note: "E-string-root movable maj7 grip from the Misch neo-soul course."
+  },
+  {
+    id: "misch-e-root-m7",
+    source: "Misch-Inspired Rhythm Guitar Course PDF: Basic 7th Chords",
+    quality: "m7",
+    intervals: [0, 3, 7, 10],
+    rootString: 5,
+    lowToHighOffsets: [0, 2, 0, 0, 0, 0],
+    styleTags: ["neo-soul", "misch", "e-string-root"],
+    genreBonuses: { neoSoul: 130, funk: 70 },
+    note: "E-string-root movable minor 7 grip from the Misch neo-soul course."
+  },
+  {
+    id: "misch-e-root-7",
+    source: "Misch-Inspired Rhythm Guitar Course PDF: Basic 7th Chords",
+    quality: "7",
+    intervals: [0, 4, 7, 10],
+    rootString: 5,
+    lowToHighOffsets: [0, 2, 0, 1, 0, 0],
+    styleTags: ["neo-soul", "misch", "e-string-root"],
+    genreBonuses: { neoSoul: 120, funk: 90 },
+    note: "E-string-root movable dominant 7 grip from the Misch neo-soul course."
+  },
+  {
+    id: "wes-a-root-maj7-block",
+    source: "Wes Montgomery block chord study: major 7th",
+    quality: "maj7",
+    intervals: [0, 4, 7, 11],
+    rootString: 4,
+    lowToHighOffsets: [null, 0, 2, 1, 2, null],
+    styleTags: ["jazz", "wes", "block-chord", "a-string-root"],
+    genreBonuses: { jazz: 190 },
+    note: "A-string-root major 7 block-chord grip from a Wes-style study."
+  },
+  {
+    id: "wes-e-root-maj7-block",
+    source: "Wes Montgomery block chord study: major 7th",
+    quality: "maj7",
+    intervals: [0, 4, 7, 11],
+    rootString: 5,
+    lowToHighOffsets: [0, null, 1, 1, 0, null],
+    styleTags: ["jazz", "wes", "block-chord", "e-string-root"],
+    genreBonuses: { jazz: 160 },
+    note: "E-string-root major 7 block-chord grip from a Wes-style study."
+  },
+  {
+    id: "wes-a-root-m7-block",
+    source: "Wes Montgomery block chord study: minor 7th",
+    quality: "m7",
+    intervals: [0, 3, 7, 10],
+    rootString: 4,
+    lowToHighOffsets: [null, 0, 2, 0, 1, null],
+    styleTags: ["jazz", "wes", "block-chord", "a-string-root"],
+    genreBonuses: { jazz: 190 },
+    note: "A-string-root minor 7 block-chord grip from a Wes-style study."
+  },
+  {
+    id: "wes-e-root-m7-block",
+    source: "Wes Montgomery block chord study: minor 7th",
+    quality: "m7",
+    intervals: [0, 3, 7, 10],
+    rootString: 5,
+    lowToHighOffsets: [0, 2, 0, 0, 0, null],
+    styleTags: ["jazz", "wes", "block-chord", "e-string-root"],
+    genreBonuses: { jazz: 140 },
+    note: "E-string-root minor 7 block-chord grip from a Wes-style study."
+  },
+  {
+    id: "wes-a-root-7-block",
+    source: "Wes Montgomery block chord study: dominant 7th",
+    quality: "7",
+    intervals: [0, 4, 7, 10],
+    rootString: 4,
+    lowToHighOffsets: [null, 0, 2, 0, 2, null],
+    styleTags: ["jazz", "wes", "block-chord", "a-string-root"],
+    genreBonuses: { jazz: 180 },
+    note: "A-string-root dominant 7 block-chord grip from a Wes-style study."
+  },
+  {
+    id: "wes-e-root-7-block",
+    source: "Wes Montgomery block chord study: dominant 7th",
+    quality: "7",
+    intervals: [0, 4, 7, 10],
+    rootString: 5,
+    lowToHighOffsets: [0, null, 0, 1, 0, null],
+    styleTags: ["jazz", "wes", "block-chord", "e-string-root"],
+    genreBonuses: { jazz: 170 },
+    note: "E-string-root dominant 7 block-chord grip from a Wes-style study."
+  },
+  {
+    id: "wes-a-root-m7b5-block",
+    source: "Wes Montgomery block chord study: minor 7 flat 5",
+    quality: "m7b5",
+    intervals: [0, 3, 6, 10],
+    rootString: 4,
+    lowToHighOffsets: [null, 0, 1, 0, 1, null],
+    styleTags: ["jazz", "wes", "block-chord", "a-string-root"],
+    genreBonuses: { jazz: 190 },
+    note: "A-string-root minor 7 flat 5 block-chord grip from a Wes-style study."
+  },
+  {
+    id: "wes-e-root-m7b5-block",
+    source: "Wes Montgomery block chord study: minor 7 flat 5",
+    quality: "m7b5",
+    intervals: [0, 3, 6, 10],
+    rootString: 5,
+    lowToHighOffsets: [0, null, 0, 0, -1, null],
+    styleTags: ["jazz", "wes", "block-chord", "e-string-root"],
+    genreBonuses: { jazz: 160 },
+    note: "E-string-root minor 7 flat 5 block-chord grip from a Wes-style study."
+  },
+  {
+    id: "wes-a-root-9-block",
+    source: "Wes Montgomery block chord study: 9th",
+    quality: "9",
+    intervals: [0, 4, 10, 14],
+    rootString: 4,
+    lowToHighOffsets: [null, 0, -1, 0, 0, null],
+    styleTags: ["jazz", "wes", "block-chord", "a-string-root"],
+    genreBonuses: { jazz: 170 },
+    note: "A-string-root dominant 9 block-chord grip from a Wes-style study."
+  },
+  {
+    id: "wes-e-root-9-block",
+    source: "Wes Montgomery block chord study: 9th",
+    quality: "9",
+    intervals: [0, 4, 10, 14],
+    rootString: 5,
+    lowToHighOffsets: [0, null, 0, -1, 0, null],
+    styleTags: ["jazz", "wes", "block-chord", "e-string-root"],
+    genreBonuses: { jazz: 170 },
+    note: "E-string-root dominant 9 block-chord grip from a Wes-style study."
+  },
+  {
+    id: "wes-e-root-13-block",
+    source: "Wes Montgomery block chord study: 13th",
+    quality: "13",
+    intervals: [0, 4, 10, 21],
+    rootString: 5,
+    lowToHighOffsets: [0, null, 0, 1, 2, null],
+    styleTags: ["jazz", "wes", "block-chord", "e-string-root"],
+    genreBonuses: { jazz: 170 },
+    note: "E-string-root dominant 13 block-chord grip from a Wes-style study."
+  },
+  {
+    id: "bossa-a-root-maj7-shell",
+    source: "Bossa guitar voicing chart: major 7 shell",
+    quality: "maj7",
+    intervals: [0, 4, 7, 11],
+    rootString: 4,
+    lowToHighOffsets: [null, 0, 2, 1, 2, null],
+    styleTags: ["bossa", "shell", "a-string-root"],
+    genreBonuses: { bossa: 190, jazz: 80 },
+    note: "A-string-root major 7 bossa shell grip."
+  },
+  {
+    id: "bossa-e-root-maj7-shell",
+    source: "Bossa guitar voicing chart: major 7 shell",
+    quality: "maj7",
+    intervals: [0, 4, 7, 11],
+    rootString: 5,
+    lowToHighOffsets: [0, null, 1, 1, 0, null],
+    styleTags: ["bossa", "shell", "e-string-root"],
+    genreBonuses: { bossa: 160, jazz: 70 },
+    note: "E-string-root major 7 bossa shell grip."
+  },
+  {
+    id: "bossa-a-root-m7-shell",
+    source: "Bossa guitar voicing chart: minor 7 shell",
+    quality: "m7",
+    intervals: [0, 3, 7, 10],
+    rootString: 4,
+    lowToHighOffsets: [null, 0, -2, 0, 1, null],
+    styleTags: ["bossa", "shell", "a-string-root"],
+    genreBonuses: { bossa: 210, jazz: 80 },
+    note: "A-string-root minor 7 bossa shell grip."
+  },
+  {
+    id: "bossa-e-root-m7-shell",
+    source: "Bossa guitar voicing chart: minor 7 shell",
+    quality: "m7",
+    intervals: [0, 3, 7, 10],
+    rootString: 5,
+    lowToHighOffsets: [0, null, 0, 0, 0, null],
+    styleTags: ["bossa", "shell", "e-string-root"],
+    genreBonuses: { bossa: 150, jazz: 60 },
+    note: "E-string-root minor 7 compact bossa grip."
+  },
+  {
+    id: "bossa-a-root-m9-shell",
+    source: "Bossa guitar voicing chart: minor 7 ninth shell",
+    quality: "m9",
+    intervals: [0, 3, 10, 14],
+    rootString: 4,
+    lowToHighOffsets: [null, 0, -2, 0, 0, null],
+    styleTags: ["bossa", "shell", "a-string-root", "ninth"],
+    genreBonuses: { bossa: 210, jazz: 80 },
+    note: "A-string-root minor 9 bossa shell grip."
+  },
+  {
+    id: "bossa-e-root-7-shell",
+    source: "Bossa guitar voicing chart: dominant 7 shell",
+    quality: "7",
+    intervals: [0, 4, 7, 10],
+    rootString: 5,
+    lowToHighOffsets: [0, null, 0, 1, 0, null],
+    styleTags: ["bossa", "shell", "e-string-root"],
+    genreBonuses: { bossa: 210, jazz: 90 },
+    note: "E-string-root dominant 7 bossa shell grip."
+  },
+  {
+    id: "bossa-a-root-7-shell",
+    source: "Bossa guitar voicing chart: dominant 7 shell",
+    quality: "7",
+    intervals: [0, 4, 7, 10],
+    rootString: 4,
+    lowToHighOffsets: [null, 0, -1, 0, -2, null],
+    styleTags: ["bossa", "shell", "a-string-root"],
+    genreBonuses: { bossa: 180, jazz: 80 },
+    note: "A-string-root dominant 7 bossa shell grip."
+  },
+  {
+    id: "bossa-e-root-13-shell",
+    source: "Bossa guitar voicing chart: dominant 13 shell",
+    quality: "13",
+    intervals: [0, 4, 10, 21],
+    rootString: 5,
+    lowToHighOffsets: [0, null, 0, 1, 2, null],
+    styleTags: ["bossa", "shell", "e-string-root", "13th"],
+    genreBonuses: { bossa: 210, jazz: 100 },
+    note: "E-string-root dominant 13 bossa shell grip."
+  },
+  {
+    id: "bossa-a-root-13-shell",
+    source: "Bossa guitar voicing chart: dominant 13 shell",
+    quality: "13",
+    intervals: [0, 4, 10, 21],
+    rootString: 4,
+    lowToHighOffsets: [null, 0, -1, 0, 2, null],
+    styleTags: ["bossa", "shell", "a-string-root", "13th"],
+    genreBonuses: { bossa: 180, jazz: 80 },
+    note: "A-string-root dominant 13 bossa shell grip."
+  },
+  {
+    id: "bossa-a-root-6-9",
+    source: "Bossa guitar voicing chart: 6 ninth",
+    quality: "6(9)",
+    intervals: [0, 4, 9, 14],
+    rootString: 4,
+    lowToHighOffsets: [null, 0, -1, -1, 0, null],
+    styleTags: ["bossa", "sixth", "ninth", "a-string-root"],
+    genreBonuses: { bossa: 210, jazz: 70 },
+    note: "A-string-root 6(9) bossa grip."
+  },
+  {
+    id: "bossa-e-root-6-9",
+    source: "Bossa guitar voicing chart: 6 ninth",
+    quality: "6(9)",
+    intervals: [0, 4, 9, 14],
+    rootString: 5,
+    lowToHighOffsets: [0, null, -1, -1, 0, null],
+    styleTags: ["bossa", "sixth", "ninth", "e-string-root"],
+    genreBonuses: { bossa: 170, jazz: 60 },
+    note: "E-string-root 6(9) bossa grip."
+  },
+  {
+    id: "bossa-a-root-m6",
+    source: "Bossa guitar voicing chart: minor 6",
+    quality: "m6",
+    intervals: [0, 3, 9],
+    rootString: 4,
+    lowToHighOffsets: [null, 0, -2, -1, 1, null],
+    styleTags: ["bossa", "minor-sixth", "a-string-root"],
+    genreBonuses: { bossa: 160, jazz: 70 },
+    note: "A-string-root minor 6 bossa grip."
+  },
+  {
+    id: "bossa-a-root-m7b5",
+    source: "Bossa guitar voicing chart: minor 7 flat 5",
+    quality: "m7b5",
+    intervals: [0, 3, 6, 10],
+    rootString: 4,
+    lowToHighOffsets: [null, 0, -1, 0, 1, null],
+    styleTags: ["bossa", "shell", "minor-seven-flat-five", "a-string-root"],
+    genreBonuses: { bossa: 180, jazz: 100 },
+    note: "A-string-root minor 7 flat 5 bossa grip."
+  },
+  {
+    id: "bossa-e-root-dim7",
+    source: "Bossa guitar voicing chart: diminished 7",
+    quality: "dim7",
+    intervals: [0, 3, 6, 9],
+    rootString: 5,
+    lowToHighOffsets: [0, null, -1, 0, -1, null],
+    styleTags: ["bossa", "diminished", "e-string-root"],
+    genreBonuses: { bossa: 160, jazz: 80 },
+    note: "E-string-root diminished 7 bossa grip."
+  }
+];
+
+function padGuitarSourceSeedRootFret(rootPC, rootString) {
+  var openPc = rootString === 5 ? 4 : 9; // low E or A string
+  var fret = (rootPC - openPc + 12) % 12;
+  if (fret < 2) fret += 12;
+  return fret;
+}
+
+function padInstallGuitarSourcePatternSeeds() {
+  if (!PAD_GUITAR_FORM_KNOWLEDGE.standard) PAD_GUITAR_FORM_KNOWLEDGE.standard = {};
+  var rootPcs = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+  for (var si = 0; si < PAD_GUITAR_SOURCE_PATTERN_SEEDS.length; si++) {
+    var seed = PAD_GUITAR_SOURCE_PATTERN_SEEDS[si];
+    for (var ri = 0; ri < rootPcs.length; ri++) {
+      var rootPC = rootPcs[ri];
+      var rootFret = padGuitarSourceSeedRootFret(rootPC, seed.rootString);
+      if (rootFret > 12) continue;
+      var lowToHigh = [];
+      for (var oi = 0; oi < seed.lowToHighOffsets.length; oi++) {
+        var offset = seed.lowToHighOffsets[oi];
+        lowToHigh.push(offset === null ? null : rootFret + offset);
+      }
+      var highToLow = lowToHigh.slice().reverse();
+      var fretKey = highToLow.map(function(f) {
+        if (f === null) return 'x';
+        if (f >= 10) return String.fromCharCode(97 + f - 10);
+        return String(f);
+      }).join('');
+      var chordKey = rootPC + "|" + seed.intervals.join(",");
+      if (!PAD_GUITAR_FORM_KNOWLEDGE.standard[chordKey]) {
+        PAD_GUITAR_FORM_KNOWLEDGE.standard[chordKey] = {};
+      }
+      if (!PAD_GUITAR_FORM_KNOWLEDGE.standard[chordKey][fretKey]) {
+        PAD_GUITAR_FORM_KNOWLEDGE.standard[chordKey][fretKey] = {
+          movable: true,
+          rankBonus: 0,
+          styleTags: seed.styleTags.slice(),
+          genreBonuses: Object.assign({}, seed.genreBonuses),
+          source: seed.source,
+          sourceSeedId: seed.id,
+          fingerings: [
+            { id: seed.id, fingers: null, barre: null, note: seed.note }
+          ],
+          mutes: []
+        };
+      } else {
+        var existing = PAD_GUITAR_FORM_KNOWLEDGE.standard[chordKey][fretKey];
+        if (!existing.genreBonuses) existing.genreBonuses = {};
+        for (var gb in seed.genreBonuses) {
+          existing.genreBonuses[gb] = Math.max(existing.genreBonuses[gb] || 0, seed.genreBonuses[gb]);
+        }
+        if (!existing.styleTags) existing.styleTags = [];
+        for (var ti = 0; ti < seed.styleTags.length; ti++) {
+          if (existing.styleTags.indexOf(seed.styleTags[ti]) === -1) existing.styleTags.push(seed.styleTags[ti]);
+        }
+      }
+    }
+  }
+}
+
+padInstallGuitarSourcePatternSeeds();
+
 // Conditional exports for Node.js (Vitest) — ignored in browser
 if (typeof module !== 'undefined') module.exports = {
   NOTE_NAMES_SHARP, NOTE_NAMES_FLAT, FLAT_MAJOR_KEYS,
@@ -744,4 +1178,5 @@ if (typeof module !== 'undefined') module.exports = {
   padBuildChordDetectDB, CHORD_DETECT_DB, TRIAD_DETECT_DB, TETRAD_DETECT_DB,
   PAD_THEME_OKABE_ITO,
   PAD_GUITAR_REFERENCE_FORMS, PAD_GUITAR_POSITION_FAMILIES, PAD_GUITAR_FORM_KNOWLEDGE,
+  PAD_GUITAR_SOURCE_PATTERN_SEEDS,
 };

@@ -1425,6 +1425,9 @@ function padEnumGuitarChordForms(chordPCS, rootPC, tuning, maxFrets, maxSpan, op
 
     var formKnowledge = padGetGuitarFormKnowledge(r.frets, chordPCS, rootPC, tuning, options);
     var knowledgeBonus = formKnowledge && formKnowledge.rankBonus ? formKnowledge.rankBonus : 0;
+    if (formKnowledge && formKnowledge.genreBonuses && options.genre && formKnowledge.genreBonuses[options.genre]) {
+      knowledgeBonus += formKnowledge.genreBonuses[options.genre];
+    }
 
     var closedAFormBonus = 0;
     if (numStrings === 6 && has7or6 && r.rootInBass && r.bassString === 4 && openCount === 0) {
