@@ -323,10 +323,11 @@ function padCalcAllVoicingPositions(bassRow, bassCol, offsets, gridRows, gridCol
 /**
  * Find the most compact pad positions for a set of MIDI notes.
  * Each MIDI note maps to 1-2 grid positions; this picks the combination
- * that minimizes the bounding box (maxDim first, then area).
+ * that minimizes the bounding box. When degreeMap is provided, shell /
+ * triad clusters are preferred so HPS voicings land in playable positions.
  * Returns [{row, col, midi}] — one position per in-range note.
  */
-function padFindCompactPositions(midiNotes, gridRows, gridCols, bm, rowInterval) {
+function padFindCompactPositions(midiNotes, gridRows, gridCols, bm, rowInterval, degreeMap) {
   var candidates = [];
   for (var i = 0; i < midiNotes.length; i++) {
     var midi = midiNotes[i];
@@ -344,6 +345,50 @@ function padFindCompactPositions(midiNotes, gridRows, gridCols, bm, rowInterval)
   if (validIndices.length === 0) return [];
   var validCands = validIndices.map(function(i) { return candidates[i]; });
   var best = null;
+  function degreeForMidi(midi) {
+    if (!degreeMap) return '';
+    return degreeMap[midi] || degreeMap[String(midi)] || '';
+  }
+  function clusterScore(chosen, groups) {
+    if (!degreeMap) return 0;
+    var buckets = groups.map(function(matches) {
+      return chosen.filter(function(p) {
+        var deg = degreeForMidi(p.midi);
+        return matches.indexOf(deg) >= 0;
+      });
+    });
+    for (var b = 0; b < buckets.length; b++) {
+      if (buckets[b].length === 0) return 9999;
+    }
+    var bestCluster = Infinity;
+    function walk(idx, picked) {
+      if (idx === buckets.length) {
+        var minR = picked[0].row, maxR = minR, minC = picked[0].col, maxC = minC;
+        var pair = 0;
+        for (var i = 0; i < picked.length; i++) {
+          if (picked[i].row < minR) minR = picked[i].row;
+          if (picked[i].row > maxR) maxR = picked[i].row;
+          if (picked[i].col < minC) minC = picked[i].col;
+          if (picked[i].col > maxC) maxC = picked[i].col;
+          for (var j = i + 1; j < picked.length; j++) {
+            pair += Math.abs(picked[i].row - picked[j].row) + Math.abs(picked[i].col - picked[j].col);
+          }
+        }
+        var rowSpan = maxR - minR + 1;
+        var colSpan = maxC - minC + 1;
+        var score = rowSpan * colSpan * 20 + Math.max(rowSpan, colSpan) * 5 + pair;
+        if (score < bestCluster) bestCluster = score;
+        return;
+      }
+      for (var p = 0; p < buckets[idx].length; p++) {
+        picked.push(buckets[idx][p]);
+        walk(idx + 1, picked);
+        picked.pop();
+      }
+    }
+    walk(0, []);
+    return bestCluster;
+  }
   function search(idx, chosen) {
     if (idx === validCands.length) {
       var minR = chosen[0].row, maxR = minR, minC = chosen[0].col, maxC = minC;
@@ -355,8 +400,17 @@ function padFindCompactPositions(midiNotes, gridRows, gridCols, bm, rowInterval)
       }
       var maxDim = Math.max(maxR - minR + 1, maxC - minC + 1);
       var area = (maxR - minR + 1) * (maxC - minC + 1);
-      if (!best || maxDim < best.maxDim || (maxDim === best.maxDim && area < best.area)) {
-        best = { positions: chosen.slice(), maxDim: maxDim, area: area };
+      var shell = clusterScore(chosen, [['1'], ['3', 'b3'], ['7', 'b7', 'bb7', '6']]);
+      var triad = clusterScore(chosen, [['1'], ['3', 'b3'], ['5', 'b5', '#5']]);
+      var center = 0;
+      for (var c = 0; c < chosen.length; c++) {
+        center += Math.abs(chosen[c].row - (gridRows - 1) / 2) + Math.abs(chosen[c].col - (gridCols - 1) / 2);
+      }
+      var score = degreeMap
+        ? shell * 100000 + triad * 10000 + area * 100 + maxDim * 10 + center
+        : maxDim * 100000 + area * 100 + center;
+      if (!best || score < best.score) {
+        best = { positions: chosen.slice(), maxDim: maxDim, area: area, score: score };
       }
       return;
     }
