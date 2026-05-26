@@ -60,7 +60,7 @@ var TEST_CHORDS = [
   { root: 0,  pcs: [0,4,7,9],     name: 'C6' },
   { root: 9,  pcs: [0,3,7,9],     name: 'Am6' },
   { root: 7,  pcs: [0,4,7,9],     name: 'G6' },
-  { root: 0,  pcs: [0,4,7,9,14],  name: 'C6/9' },
+  { root: 0,  pcs: [0,4,7,9,14],  name: 'C6(9)' },
   // Diminished
   { root: 0,  pcs: [0,3,6],       name: 'Cdim' },
   { root: 0,  pcs: [0,3,6,9],     name: 'Cdim7' },

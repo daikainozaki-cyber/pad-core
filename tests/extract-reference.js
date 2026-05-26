@@ -67,7 +67,7 @@ var TARGET = {
   'C/6':        { root: 0,  pcs: [0,4,7,9],     name: 'C6' },
   'A/m6':       { root: 9,  pcs: [0,3,7,9],     name: 'Am6' },
   'G/6':        { root: 7,  pcs: [0,4,7,9],     name: 'G6' },
-  'C/69':       { root: 0,  pcs: [0,4,7,9,14],  name: 'C6/9' },
+  'C/69':       { root: 0,  pcs: [0,4,7,9,14],  name: 'C6(9)' },
 
   // === Diminished ===
   'C/dim':      { root: 0,  pcs: [0,3,6],       name: 'Cdim' },

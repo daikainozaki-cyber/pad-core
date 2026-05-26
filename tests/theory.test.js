@@ -65,6 +65,32 @@ describe('padParseChordName', () => {
     expect(r.bass).toBeNull();
   });
 
+  it('parses 6-family parenthesized 9 without treating it as 13', () => {
+    const r = padParseChordName('Em6(9)');
+    expect(r).not.toBeNull();
+    expect(r.root).toBe(4);
+    expect(r.quality).toBe('m6(9)');
+    expect(r.intervals).toEqual([0, 3, 7, 9, 14]);
+    expect(r.displayName).toBe('Em6(9)');
+  });
+
+  it('parses practical sixth-family lydian notation', () => {
+    const r = padParseChordName('F6(9,#11)');
+    expect(r).not.toBeNull();
+    expect(r.root).toBe(5);
+    expect(r.quality).toBe('6(9,#11)');
+    expect(r.intervals).toEqual([0, 4, 7, 9, 14, 18]);
+    expect(r.displayName).toBe('F6(9,#11)');
+  });
+
+  it('keeps legacy 6/9 input readable but displays the sixth-family notation', () => {
+    const r = padParseChordName('C6/9');
+    expect(r).not.toBeNull();
+    expect(r.quality).toBe('6/9');
+    expect(r.intervals).toEqual([0, 4, 7, 9, 14]);
+    expect(r.displayName).toBe('C6(9)');
+  });
+
   it('returns null for empty string', () => {
     expect(padParseChordName('')).toBeNull();
   });

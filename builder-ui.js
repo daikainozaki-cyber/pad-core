@@ -155,7 +155,7 @@ function padUpdateTensionVisibility(btns, quality, applyTensionFn, opts) {
 
   // Category E: With 7th, hide "6" labels (use "13" instead)
   if (has7th) {
-    var sixLabels = { '6': 1, '6/9': 1, '6/9\n(#11)': 1 };
+    var sixLabels = { '6': 1, '6(9)': 1, '6(9,#11)': 1 };
     btns.forEach(function(btn) {
       if (btn._tension && sixLabels[btn._tension.label]) btn.classList.add('quality-hidden');
     });
@@ -288,7 +288,7 @@ function padUpdateTensionVisibility(btns, quality, applyTensionFn, opts) {
   if (isTriad && !has7th && !has6th) {
     var isMajOrMin = quality.pcs.indexOf(7) >= 0;
     var allowedLabels = { 'add9': 1 };
-    if (isMajOrMin) { allowedLabels['6'] = 1; allowedLabels['6/9'] = 1; }
+    if (isMajOrMin) { allowedLabels['6'] = 1; allowedLabels['6(9)'] = 1; }
 
     btns.forEach(function(btn) {
       if (!btn._tension || btn.classList.contains('quality-hidden')) return;
