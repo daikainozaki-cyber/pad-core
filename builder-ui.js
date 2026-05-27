@@ -97,12 +97,14 @@ function padBuildTensionGrid(container, onToggle) {
   if (!container) return { clear: function() {}, getBtns: function() { return []; } };
   container.innerHTML = '';
 
+  var _tensionOrd = 0;
   TENSION_ROWS.forEach(function(row) {
     row.forEach(function(t) {
       if (!t) return;
       var btn = document.createElement('button');
       btn.className = 'tension-btn';
       btn._tension = t;
+      btn._tensionOrder = _tensionOrd++;
       btn.textContent = t.label;
       btn.onclick = (function(tension, el) {
         return function() { onToggle(tension, el); };
@@ -215,16 +217,30 @@ function padUpdateTensionVisibility(btns, quality, applyTensionFn, opts) {
         if (!btn._tension || btn.classList.contains('quality-hidden')) return;
         var m = btn._tension.mods;
         if (m.replace3 !== undefined) return;
+        // On dominants, hide 5th alterations: aug (#5) duplicates b13, and
+        // b5 duplicates #11. Use b13 / #11 (extension tensions) instead.
+        if (m.sharp5) { btn.classList.add('quality-hidden'); return; }
+        if (m.flat5) { btn.classList.add('quality-hidden'); return; }
         if (m.add && m.add.indexOf(5) >= 0) btn.classList.add('quality-hidden');
       });
     } else {
       var isMinor = quality.pcs.indexOf(3) >= 0;
+      var isMaj7E = quality.pcs.indexOf(4) >= 0 && quality.pcs.indexOf(11) >= 0;
       var isDim7 = isMinor && quality.pcs.indexOf(6) >= 0 && quality.pcs.indexOf(9) >= 0 && quality.pcs.indexOf(10) < 0;
       var isMM7 = isMinor && quality.pcs.indexOf(11) >= 0;
       btns.forEach(function(btn) {
         if (!btn._tension || btn.classList.contains('quality-hidden')) return;
         var m = btn._tension.mods;
         if (m.replace3 !== undefined) return;
+        // maj7 takes only natural tensions (9 / #11 / 13). Altered notes
+        // (b9/#9/b13) and 5th alterations (aug=#5, b5) are not maj7 tensions — hide them.
+        if (isMaj7E && (m.sharp5 || m.flat5 ||
+              (m.add && (m.add.indexOf(1) >= 0 || m.add.indexOf(3) >= 0 || m.add.indexOf(8) >= 0)))) {
+          btn.classList.add('quality-hidden'); return;
+        }
+        // dim7: aug (#5) duplicates the b13 pitch and is redundant on a symmetric
+        // diminished chord — hide it (b5 is already a chord tone → no-op hidden).
+        if (isDim7 && m.sharp5) { btn.classList.add('quality-hidden'); return; }
         if (m.sharp5 || m.flat5) { btn.classList.add('tension-uncommon'); return; }
         if (m.add) {
           if (isMM7 && m.add.indexOf(6) >= 0) { btn.classList.add('quality-hidden'); return; }
@@ -287,8 +303,11 @@ function padUpdateTensionVisibility(btns, quality, applyTensionFn, opts) {
   // Category D2: Triad-specific tension whitelist (64PE extension, safe for MRC)
   if (isTriad && !has7th && !has6th) {
     var isMajOrMin = quality.pcs.indexOf(7) >= 0;
+    // Augmented triad (maj3 + #5, no P5): whole-tone tensions = 9, #11.
+    var isAugTriad = quality.pcs.indexOf(4) >= 0 && quality.pcs.indexOf(8) >= 0 && quality.pcs.indexOf(7) < 0;
     var allowedLabels = { 'add9': 1 };
     if (isMajOrMin) { allowedLabels['6'] = 1; allowedLabels['6(9)'] = 1; }
+    if (isAugTriad) { allowedLabels['#11'] = 1; }
 
     btns.forEach(function(btn) {
       if (!btn._tension || btn.classList.contains('quality-hidden')) return;

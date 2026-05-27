@@ -75,6 +75,8 @@ const BUILDER_QUALITIES = [
   [{name:'7', label:'7', pcs:[0,4,7,10]}, {name:'m7', label:'m7', pcs:[0,3,7,10]}, {name:'dim7', label:'dim7', pcs:[0,3,6,9]}],
   // Row 3
   [{name:'Maj7', label:'Maj7', pcs:[0,4,7,11]}, {name:'mMaj7', label:'mMaj7', pcs:[0,3,7,11]}, {name:'aug', label:'aug', pcs:[0,4,8]}],
+  // Row 4 — sus 系統 (beginner-selectable: hard to construct from intervals, so offered as one-tap qualities)
+  [{name:'sus4', label:'sus4', pcs:[0,5,7]}, {name:'sus2', label:'sus2', pcs:[0,2,7]}, {name:'7sus4', label:'7sus4', pcs:[0,5,7,10]}],
 ];
 
 // ======== TENSION DEFINITIONS (Chord Builder Step 3) ========
