@@ -67,16 +67,18 @@ const KEY_SPELLINGS = [
 // ======== QUALITY DEFINITIONS (Chord Builder Step 2) ========
 // 4x3 grid matching Clover Chord Systems
 const BUILDER_QUALITIES = [
-  // Row 0
-  [{name:'', label:'Maj', pcs:[0,4,7]}, {name:'m', label:'m', pcs:[0,3,7]}, {name:'m7(b5)', label:'m7\u207B\u2075', pcs:[0,3,6,10]}],
-  // Row 1
-  [{name:'6', label:'6', pcs:[0,4,7,9]}, {name:'m6', label:'m6', pcs:[0,3,7,9]}, {name:'dim', label:'dim', pcs:[0,3,6]}],
-  // Row 2
-  [{name:'7', label:'7', pcs:[0,4,7,10]}, {name:'m7', label:'m7', pcs:[0,3,7,10]}, {name:'dim7', label:'dim7', pcs:[0,3,6,9]}],
-  // Row 3
-  [{name:'Maj7', label:'Maj7', pcs:[0,4,7,11]}, {name:'mMaj7', label:'mMaj7', pcs:[0,3,7,11]}, {name:'aug', label:'aug', pcs:[0,4,8]}],
-  // Row 4 — sus 系統 (beginner-selectable: hard to construct from intervals, so offered as one-tap qualities)
-  [{name:'sus4', label:'sus4', pcs:[0,5,7]}, {name:'sus2', label:'sus2', pcs:[0,2,7]}, {name:'7sus4', label:'7sus4', pcs:[0,5,7,10]}],
+  // Row 0 — triads: major / minor / diminished
+  [{name:'', label:'Maj', pcs:[0,4,7]}, {name:'m', label:'m', pcs:[0,3,7]}, {name:'dim', label:'dim', pcs:[0,3,6]}],
+  // Row 1 — 6th family + diminished 7th
+  [{name:'6', label:'6', pcs:[0,4,7,9]}, {name:'m6', label:'m6', pcs:[0,3,7,9]}, {name:'dim7', label:'dim7', pcs:[0,3,6,9]}],
+  // Row 2 — 7th family + half-diminished
+  [{name:'7', label:'7', pcs:[0,4,7,10]}, {name:'m7', label:'m7', pcs:[0,3,7,10]}, {name:'m7(b5)', label:'m7⁻⁵', pcs:[0,3,6,10]}],
+  // Row 3 — maj7 family + 7sus4
+  [{name:'Maj7', label:'Maj7', pcs:[0,4,7,11]}, {name:'mMaj7', label:'mMaj7', pcs:[0,3,7,11]}, {name:'7sus4', label:'7sus4', pcs:[0,5,7,10]}],
+  // Row 4 — other / non-tertian: sus (=sus4; sus2 is its inversion) / augmented / [空].
+  // 4度堆積 (So What) は Quality ではなくボイシング技法なので TASTY 側 (So What recipe) に移管。
+  // 3列目は null = 空セル (padBuildQualityGrid が .quality-btn.empty として描画、レイアウト維持)。
+  [{name:'sus4', label:'sus', pcs:[0,5,7]}, {name:'aug', label:'aug', pcs:[0,4,8]}, null],
 ];
 
 // ======== TENSION DEFINITIONS (Chord Builder Step 3) ========
@@ -414,6 +416,10 @@ function padBuildChordDetectDB() {
     if (!q) return;
     db.push({ name: q.name || 'Maj', pcs: q.pcs, pcsSet: new Set(q.pcs) });
   });
+
+  // sus2 is not a builder quality (it is an inversion of the sus4 a 5th up),
+  // but it should still be recognized by chord detection.
+  db.push({ name: 'sus2', pcs: [0, 2, 7], pcsSet: new Set([0, 2, 7]) });
 
   function addGeneratedTensionChords(baseName, basePcs, groups) {
     function search(groupIdx, picked) {
