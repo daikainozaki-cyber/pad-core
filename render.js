@@ -311,6 +311,7 @@ function padRenderFretboard(svg, opts) {
   var selFrets = o.selectedFrets || null;
   var labelFn = o.labelFn || function(pc, iv) { return SCALE_DEGREE_NAMES[iv]; };
   var chordMode = o.chordMode || false;
+  var colorOff = !!o.colorOff;
   var solo = o.solo || false;
   var W = o.width || 564;
   var mobile = o.isMobile || false;
@@ -419,7 +420,8 @@ function padRenderFretboard(svg, opts) {
     var isOpen = posActive && selFrets && selFrets[sn] === 0;
     if (isOpen) {
       var openPC = tuning[sn] % 12;
-      var dotColor = openPC === rootPC ? C.root
+      var dotColor = colorOff && chordMode ? C.chord
+        : openPC === rootPC ? C.root
         : g3.has(openPC) ? C.guide3
         : g7.has(openPC) ? C.guide7
         : tp.has(openPC) ? C.tension
@@ -510,6 +512,12 @@ function padRenderFretboard(svg, opts) {
         ndot.setAttribute('fill', isChar ? C.overlayChar : C.overlay);
         ndot.setAttribute('opacity', isChar ? '0.5' : '0.4');
         dTextColor = C.overlayText;
+      } else if (colorOff && chordMode && (isRoot || isBass || isGuide3 || isGuide7 || isAvoid || isTension || pcsSet.has(dpc))) {
+        dColor = C.chord; dTextColor = '#000';
+        ndot.setAttribute('fill', dColor); ndot.setAttribute('opacity', '0.9');
+      } else if (colorOff && !chordMode && isChar) {
+        dColor = C.chord; dTextColor = '#000';
+        ndot.setAttribute('fill', dColor); ndot.setAttribute('opacity', '0.9');
       } else if (isOmitted) {
         dColor = C.omitted; dTextColor = '#fff';
         ndot.setAttribute('fill', dColor); ndot.setAttribute('opacity', '0.5');
@@ -567,7 +575,8 @@ function padRenderFretboard(svg, opts) {
         var gsy = topM + gs * strH;
         var gfx = gf === 0 ? nutX - 2 : nutX + (gf - 0.5) * fretW;
         var gpc = (tuning[gs] % 12 + gf) % 12;
-        var gColor = gpc === rootPC ? C.root
+        var gColor = colorOff && chordMode ? C.chord
+          : gpc === rootPC ? C.root
           : g3.has(gpc) ? C.guide3
           : g7.has(gpc) ? C.guide7
           : tp.has(gpc) ? C.tension
@@ -697,6 +706,7 @@ function padRenderPiano(svg, opts) {
   var ovlPCS = o.overlayPCS || null;
   var ovlCharPCS = o.overlayCharPCS || null;
   var chordMode = o.chordMode || false;
+  var colorOff = !!o.colorOff;
   var numOctaves = o.numOctaves || 4;
   var startMidi = o.startMidi != null ? o.startMidi : 48;
   var selectedNotes = o.selectedNotes || new Set();
@@ -761,7 +771,15 @@ function padRenderPiano(svg, opts) {
     var isOvlChar = isOvl && ovlCharPCS && ovlCharPCS.has(pc);
     var baseOff = isWhite ? '#eee' : '#222';
     var fill, textColor, opacity = 1;
-    if (isRoot)          { fill = C.root; textColor = '#fff'; }
+    if (colorOff && chordMode && (isRoot || isBass || isGuide3 || isGuide7 || isAvoid || isTension || isActive)) {
+      fill = isWhite ? (C.pianoChordWhite || '#90CAF9') : (C.pianoChordBlack || '#4A90D9');
+      textColor = isWhite ? '#333' : '#fff';
+    }
+    else if (colorOff && !chordMode && isChar) {
+      fill = isWhite ? (C.pianoChordWhite || '#90CAF9') : (C.pianoChordBlack || '#4A90D9');
+      textColor = isWhite ? '#333' : '#fff';
+    }
+    else if (isRoot)     { fill = C.root; textColor = '#fff'; }
     else if (isBass)     { fill = C.bass; textColor = '#000'; }
     else if (isGuide3)   { fill = C.guide3; textColor = '#fff'; }
     else if (isGuide7)   { fill = C.guide7; textColor = '#fff'; }
