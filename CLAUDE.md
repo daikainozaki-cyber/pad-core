@@ -37,7 +37,7 @@ npm run test:watch  # vitest watch mode
 ```
 
 ## 現在地（自動更新）
-- 状態: 2026-05-23 時点で chord detection / spelling / UST / candidate ranking の大改修を実施済み。Web consumer では V6.4.2、Desktop consumer では v1.5.0 として反映済み。`G B A D` は `Gadd9 / B` 系を優先し、minor7+b13 へ誤判定しない test を追加済み。
+- 状態: 2026-05-28、テンション判定を Practical available-scale union から導出するよう強化（機能的ドミナント等の available tension がより正確に）。TASTY voicing recipe に4度堆積（So What）系を追加、`TASTY_DEGREE_MAP` に `4`/`#4` を追加（tight quartal stack 用）。Web consumer は V6.6.0、Desktop は v1.5.0 RC に反映済み。`G B A D`→`Gadd9 / B` 系優先の test は維持。
 - 残作業: 1.5.x で Guitar engine の候補順位調整と Double Stop layer の理論支援を追加する可能性が高い。特に 5度 bass の guitar shape は優先度を落とし、一般的な実用表記を上位にする。
 - 正規ルール: pad-core が理論計算 SSOT。App 側で chord detection / degree / UST 判定を再定義しない。UST は「shell + upper triad」の教育表示であり、shell がないものを安易に UST と呼ばない。minor7 に b13/b6 tension を足した candidate は原則作らない。
 - 次: Double Stop layer 仕様メモに沿って、Major / Mixolydian / Major Pentatonic の 3rd/4th/6th ペア生成を pure helper として切り出せるか検討する。
