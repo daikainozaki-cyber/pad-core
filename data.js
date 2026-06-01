@@ -491,6 +491,7 @@ function padBuildChordDetectDB() {
     { name: '7(9,11)', pcs: [0,4,7,10,2,5] },
     { name: 'm7(9,11)', pcs: [0,3,7,10,2,5] },
     { name: 'Maj7(9,#11)', pcs: [0,4,7,11,2,6] },
+    { name: 'Maj7(b9,#11)', pcs: [0,4,11,1,6] },
     { name: '7(#11)', pcs: [0,4,7,10,6] },
     // 13th chords
     { name: '7(9,13)', pcs: [0,4,7,10,2,9] },
