@@ -1166,6 +1166,17 @@ describe('padDetectChord', () => {
     it('CMaj7(9) [60,64,67,71,74]', () => {
       expect(hasMatch(padDetectChord([60, 64, 67, 71, 74]), 'CMaj7(9)')).toBe(true);
     });
+    it('C altered dominant colors are not represented as Caug', () => {
+      var results = padDetectChord([60, 61, 63, 64, 68, 70]);
+      expect(results[0].name).toBe('C7(b9,#9,b13)');
+      expect(results[0].name).not.toBe('Caug');
+    });
+    it('does not force a chord name onto major seventh split-third colors', () => {
+      expect(padDetectChord([60, 63, 64, 69, 71])).toEqual([]);
+    });
+    it('does not force a chord name when flat seventh and major seventh coexist', () => {
+      expect(padDetectChord([60, 64, 67, 70, 71])).toEqual([]);
+    });
   });
 
   describe('inversions', () => {
@@ -1179,6 +1190,26 @@ describe('padDetectChord', () => {
       const results = padDetectChord([59, 67, 69, 74]);
       expect(results[0].name).toBe('Gadd9 / B');
       expect(results.some(r => r.name.indexOf('Bm7(b13)') >= 0)).toBe(false);
+    });
+    it('keeps useful no3 hybrid slash candidates', () => {
+      const results = padDetectChord([60, 67, 71, 74]);
+      expect(hasMatch(results, 'G / C')).toBe(true);
+    });
+    it('keeps phrygian-sus hybrid slash candidates', () => {
+      const results = padDetectChord([55, 65, 68, 72, 74]);
+      expect(hasMatch(results, 'Fm6 / G')).toBe(true);
+    });
+    it('keeps altered and condim slash candidates behind functional names', () => {
+      const altered = padDetectChord([55, 68, 71, 75, 77]);
+      const condim = padDetectChord([55, 68, 71, 74, 77]);
+      const tritone = padDetectChord([55, 61, 65, 68]);
+      expect(hasMatch(altered, 'Abm6 / G')).toBe(true);
+      expect(hasMatch(condim, 'Abdim7 / G')).toBe(true);
+      expect(hasMatch(tritone, 'Db / G')).toBe(true);
+    });
+    it('does not list non-functional pedal triads as slash candidates', () => {
+      const results = padDetectChord([60, 62, 66, 69]);
+      expect(results.some(r => r.name === 'D / C')).toBe(false);
     });
   });
 

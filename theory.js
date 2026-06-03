@@ -1906,6 +1906,55 @@ function padRejectMinorSeventhFlat13(chordName, intervals) {
     && intervals[8];
 }
 
+function padAugAlteredPenalty(chordName, intervals) {
+  if ((chordName || '').indexOf('aug') < 0) return 0;
+  var hasDominantSeventh = intervals[10];
+  var hasAlteredDominantColor = intervals[1] || intervals[3] || intervals[6] || intervals[8];
+  return hasDominantSeventh && hasAlteredDominantColor ? 140 : 0;
+}
+
+function padRejectDominantSlashOverBassShell(chordName, rootPC, lowestPC, lowestHasShell) {
+  return lowestHasShell
+    && rootPC !== lowestPC
+    && /^7/.test(chordName || '');
+}
+
+function padIsUnnameableMajorSplitThirdColor(pcs, bassPC) {
+  var intervals = {};
+  for (var i = 0; i < pcs.length; i++) intervals[((pcs[i] - bassPC) + 12) % 12] = true;
+  return !!((intervals[10] && intervals[11])
+    || (intervals[3] && intervals[4] && intervals[11] && !intervals[10]));
+}
+
+function padIsAllowedSlashChordCandidate(qualityName, qualityPcs, upperRootPC, bassPC) {
+  var bassFromUpper = ((bassPC - upperRootPC) + 12) % 12;
+  if (qualityPcs.indexOf(bassFromUpper) !== -1) return true;
+
+  var upperFromBass = ((upperRootPC - bassPC) + 12) % 12;
+  if (qualityName === 'Maj') {
+    return upperFromBass === 6   // bV / bass: altered/condim dominant color
+      || upperFromBass === 7     // V / bass: transparent no3 major color
+      || upperFromBass === 10;   // bVII / bass: sus/pedal-dominant color
+  }
+  if (qualityName === 'm') {
+    return upperFromBass === 10; // bVIIm / bass: dark sus/phrygian color
+  }
+  if (qualityName === 'Maj7') {
+    return upperFromBass === 10; // bVIIMaj7 / bass: sus13 or minor 9/11 color
+  }
+  if (qualityName === 'm7') {
+    return upperFromBass === 10; // bVIIm7 / bass: phrygian-sus hybrid
+  }
+  if (qualityName === 'm6') {
+    return upperFromBass === 1   // bIIm6 / bass: altered dominant candidate
+      || upperFromBass === 10;   // bVIIm6 / bass: phrygian-sus candidate
+  }
+  if (qualityName === 'dim7') {
+    return upperFromBass === 1;  // bIIdim7 / bass: condim dominant candidate
+  }
+  return false;
+}
+
 function padDetectChord(midiNotes, spellingKey) {
   if (midiNotes.length < 2) return [];
   var pcs = [];
@@ -1921,9 +1970,20 @@ function padDetectChord(midiNotes, spellingKey) {
     if (midiNotes[i] < lowestPC) lowestPC = midiNotes[i];
   }
   lowestPC = lowestPC % 12;
+  if (padIsUnnameableMajorSplitThirdColor(pcs, lowestPC)) return [];
   var candidates = [];
   var seenNames = {};
   var lowestHasShell = padHasBassShell(pcs, lowestPC);
+  function padPushOrBumpCandidate(name, rootPC, score) {
+    for (var ci = 0; ci < candidates.length; ci++) {
+      if (candidates[ci].name === name) {
+        candidates[ci].score = Math.max(candidates[ci].score || 0, score);
+        return;
+      }
+    }
+    seenNames[name] = true;
+    candidates.push({ name: name, rootPC: rootPC, score: score });
+  }
 
   for (var ri = 0; ri < pcs.length; ri++) {
     var rootPC = pcs[ri];
@@ -1941,9 +2001,11 @@ function padDetectChord(midiNotes, spellingKey) {
         }
         if (matched === chord.pcs.length) {
           if (padRejectMinorSeventhFlat13(chord.name, intervals)) continue;
+          if (padRejectDominantSlashOverBassShell(chord.name, rootPC, lowestPC, lowestHasShell)) continue;
           var extra = pcs.length - chord.pcs.length;
           var isRootPosition = rootPC === lowestPC;
-          var score = (isRootPosition ? 100 : 0) + chord.pcs.length * 10 - extra + padShellScoreBonus(intervals);
+          var score = (isRootPosition ? 100 : 0) + chord.pcs.length * 10 - extra
+            + padShellScoreBonus(intervals) - padAugAlteredPenalty(chord.name, intervals);
           var rootName = padPreferredRootNoteName(rootPC, spellingKey);
           var bass = lowestPC !== rootPC ? ' / ' + padChordIntervalNoteName(rootPC, lowestPC) : '';
           var name = rootName + chord.name + bass;
@@ -1967,11 +2029,13 @@ function padDetectChord(midiNotes, spellingKey) {
           }
           if (matched === omit5pcs.length) {
             if (padRejectMinorSeventhFlat13(chord.name, intervals)) continue;
+            if (padRejectDominantSlashOverBassShell(chord.name, rootPC, lowestPC, lowestHasShell)) continue;
             var extra = pcs.length - omit5pcs.length;
             var isRootPosition = rootPC === lowestPC;
             var rootBonus = (isRootPosition && extra === 0) ? 100 : 0;
             var extraPenalty = extra > 0 ? extra * 35 : 0;
-            var score = rootBonus + chord.pcs.length * 10 - extra - 5 - extraPenalty + padShellScoreBonus(intervals);
+            var score = rootBonus + chord.pcs.length * 10 - extra - 5 - extraPenalty
+              + padShellScoreBonus(intervals) - padAugAlteredPenalty(chord.name, intervals);
             var rootName = padPreferredRootNoteName(rootPC, spellingKey);
             var bass = lowestPC !== rootPC ? ' / ' + padChordIntervalNoteName(rootPC, lowestPC) : '';
             var hasShell = (intervals[3] || intervals[4]) && (intervals[10] || intervals[11]);
@@ -2007,15 +2071,16 @@ function padDetectChord(midiNotes, spellingKey) {
             if (triadIntervals[triad.pcs[k]]) matched++;
           }
           if (matched === triad.pcs.length) {
+            if (!padIsAllowedSlashChordCandidate(triad.name, triad.pcs, triadRoot, lowestPC)) continue;
             var triadName = padPreferredRootNoteName(triadRoot, spellingKey) + (triad.name === 'Maj' ? '' : triad.name);
             var bassName = padChordIntervalNoteName(triadRoot, lowestPC);
             var name = triadName + ' / ' + bassName;
             var isTriadRoot = triadRoot === lowestPC;
+            var isSlashInversion = triad.pcs.indexOf(((lowestPC - triadRoot) + 12) % 12) !== -1;
             var isB7OverBassHybrid = ((triadRoot - lowestPC + 12) % 12) === 10;
-            if (!(lowestHasShell && isB7OverBassHybrid) && !seenNames[name]) {
-              seenNames[name] = true;
-              var score = isTriadRoot ? 125 : (isB7OverBassHybrid ? 144 : 25);
-              candidates.push({ name: name, rootPC: triadRoot, score: score });
+            if (!(lowestHasShell && isB7OverBassHybrid)) {
+              var score = isTriadRoot ? 125 : (!isSlashInversion ? 144 : 25);
+              padPushOrBumpCandidate(name, triadRoot, score);
             }
           }
         }
@@ -2086,15 +2151,15 @@ function padDetectChord(midiNotes, spellingKey) {
             if (tetIntervals[tet.pcs[k]]) matched++;
           }
           if (matched === tet.pcs.length) {
+            if (!padIsAllowedSlashChordCandidate(tet.name, tet.pcs, tetRoot, lowestPC)) continue;
             var tetName = padPreferredRootNoteName(tetRoot, spellingKey) + tet.name;
             var bassName = padChordIntervalNoteName(tetRoot, lowestPC);
             if (tetRoot === lowestPC) continue;
+            if (lowestHasShell && tet.name === '7') continue;
             var name = tetName + ' / ' + bassName;
-            if (!seenNames[name]) {
-              seenNames[name] = true;
-              var score = 30 + tet.pcs.length * 5;
-              candidates.push({ name: name, rootPC: tetRoot, score: score });
-            }
+            var isSlashInversion = tet.pcs.indexOf(((lowestPC - tetRoot) + 12) % 12) !== -1;
+            var score = isSlashInversion ? 30 + tet.pcs.length * 5 : 144;
+            padPushOrBumpCandidate(name, tetRoot, score);
           }
         }
       }

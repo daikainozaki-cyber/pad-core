@@ -767,7 +767,7 @@ function padRenderPiano(svg, opts) {
     var isGuide7 = inMidiScope && chordMode && guide7.has(pc) && !isRoot && !tp.has(pc);
     var isTension = inMidiScope && chordMode && tp.has(pc) && !isRoot && !isGuide3 && !isGuide7;
     var isAvoid = inMidiScope && chordMode && av.has(pc) && !isRoot;
-    var isOvl = inMidiScope && !chordMode && !isActive && !isRoot && !isBass && ovlPCS && ovlPCS.has(pc);
+    var isOvl = !chordMode && !isActive && !isRoot && !isBass && ovlPCS && ovlPCS.has(pc);
     var isOvlChar = isOvl && ovlCharPCS && ovlCharPCS.has(pc);
     var baseOff = isWhite ? '#eee' : '#222';
     var fill, textColor, opacity = 1;
