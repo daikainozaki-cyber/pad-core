@@ -2017,6 +2017,7 @@ function padDetectChord(midiNotes, spellingKey) {
       }
       // Omit5 match: 4+ note chords containing 5th (7) — also check without 5th
       if (chord.pcs.length >= 4 && chord.pcs.indexOf(7) !== -1) {
+        if (/^m?add/.test(chord.name || '')) continue;
         if (chord.name === 'm6(11)') continue;
         var omit5pcs = [];
         for (var k = 0; k < chord.pcs.length; k++) {

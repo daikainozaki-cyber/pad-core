@@ -275,7 +275,12 @@ var PAD_QUALITY_INTERVALS = {
   '7sus4':  [0, 5, 7, 10],
   'm7b5':   [0, 3, 6, 10],
   'm7-5':   [0, 3, 6, 10],
+  'madd#11': [0, 3, 7, 18],
+  'madd11': [0, 3, 7, 17],
   'madd9':  [0, 3, 7, 14],
+  'add#11': [0, 4, 7, 18],
+  'addb13': [0, 4, 7, 20],
+  'add11':  [0, 4, 7, 17],
   'add9':   [0, 4, 7, 14],
   'aug7':   [0, 4, 8, 10],
   '7alt':   [0, 4, 6, 10, 13, 15],
@@ -542,7 +547,12 @@ function padBuildChordDetectDB() {
     { name: '7sus4(b9)', pcs: [0,5,10,1] },
     // add chords
     { name: 'add9', pcs: [0,4,7,2] },
+    { name: 'add11', pcs: [0,4,7,5] },
+    { name: 'add#11', pcs: [0,4,7,6] },
+    { name: 'addb13', pcs: [0,4,7,8] },
     { name: 'madd9', pcs: [0,3,7,2] },
+    { name: 'madd11', pcs: [0,3,7,5] },
+    { name: 'madd#11', pcs: [0,3,7,6] },
   ];
   tensionChords.forEach(function(c) {
     db.push({ name: c.name, pcs: c.pcs, pcsSet: new Set(c.pcs) });

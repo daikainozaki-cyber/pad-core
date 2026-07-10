@@ -164,6 +164,14 @@ describe('padParseChordName', () => {
     expect(r.intervals).toEqual([0, 3, 7, 11]);
     expect(r.displayName).toBe('CmMaj7');
   });
+
+  it('parses add chords beyond add9', () => {
+    expect(padParseChordName('Cadd11').intervals).toEqual([0, 4, 7, 17]);
+    expect(padParseChordName('Cadd#11').intervals).toEqual([0, 4, 7, 18]);
+    expect(padParseChordName('Caddb13').intervals).toEqual([0, 4, 7, 20]);
+    expect(padParseChordName('Cmadd11').intervals).toEqual([0, 3, 7, 17]);
+    expect(padParseChordName('Cmadd#11').intervals).toEqual([0, 3, 7, 18]);
+  });
 });
 
 describe('padPitchClass', () => {
@@ -1190,6 +1198,13 @@ describe('padDetectChord', () => {
       const results = padDetectChord([59, 67, 69, 74]);
       expect(results[0].name).toBe('Gadd9 / B');
       expect(results.some(r => r.name.indexOf('Bm7(b13)') >= 0)).toBe(false);
+    });
+    it('detects add chords beyond add9 on major and minor triads', () => {
+      expect(padDetectChord([60, 64, 67, 77])[0].name).toBe('Cadd11');
+      expect(padDetectChord([60, 64, 67, 78])[0].name).toBe('Cadd#11');
+      expect(padDetectChord([60, 64, 67, 68])[0].name).toBe('Caddb13');
+      expect(padDetectChord([60, 63, 67, 77])[0].name).toBe('Cmadd11');
+      expect(padDetectChord([60, 63, 67, 78])[0].name).toBe('Cmadd#11');
     });
     it('keeps useful no3 hybrid slash candidates', () => {
       const results = padDetectChord([60, 67, 71, 74]);
